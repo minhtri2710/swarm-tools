@@ -429,24 +429,64 @@ The plugin enforces these limits regardless of input:
 - Thread summaries use LLM mode for concise output
 - File reservations auto-track for cleanup
 
-## Integration with /swarm Command
+## Custom Commands
 
-This plugin provides the primitives used by OpenCode's `/swarm` command:
+This plugin provides tools that work with OpenCode's [custom commands](https://opencode.ai/docs/commands). Create a `/swarm` command to orchestrate multi-agent work.
+
+### Setup /swarm Command
+
+Copy the example command to your OpenCode config:
+
+```bash
+cp examples/commands/swarm.md ~/.config/opencode/command/
+```
+
+Or create `~/.config/opencode/command/swarm.md`:
+
+```markdown
+---
+description: Decompose task into parallel subtasks and coordinate agents
+---
+
+You are a swarm coordinator. Break down the following task into parallel subtasks.
+
+## Task
+
+$ARGUMENTS
+
+## Instructions
+
+1. Use `swarm_decompose` to generate a decomposition prompt
+2. Create an epic with subtasks using `beads_create_epic`
+3. For each subtask, use `swarm_spawn_subtask` to get a simple prompt
+4. Spawn parallel Task agents with those prompts
+5. When agents complete, use `swarm_complete_subtask` to handle results
+6. Close the epic and sync beads when all subtasks complete
+
+## Coordinator Responsibilities
+
+- **You** reserve files before spawning agents (subagents can't use Agent Mail)
+- **You** mark beads in_progress before spawning
+- **You** handle completion: close beads, release files, create issue beads
+- Subagents just do the work and return JSON results
+
+Begin decomposition now.
+```
+
+### Usage
 
 ```
 /swarm "Add user authentication with OAuth providers"
 ```
 
-The `/swarm` command uses this plugin to:
+### How It Works
 
-1. **Decompose** - Break task into subtasks using `TaskDecompositionSchema`
-2. **Create beads** - Use `beads_create_epic` for atomic issue creation
-3. **Initialize agents** - Each agent calls `agentmail_init`
-4. **Reserve files** - Prevent conflicts with `agentmail_reserve`
-5. **Coordinate** - Agents communicate via `agentmail_send`
-6. **Track status** - Use `SwarmStatusSchema` for progress
-7. **Evaluate** - Validate work with `EvaluationSchema`
-8. **Cleanup** - Release reservations and sync beads
+1. **Decompose** - `swarm_decompose` breaks task into subtasks with file assignments
+2. **Create beads** - `beads_create_epic` creates epic + subtasks atomically
+3. **Spawn agents** - `swarm_spawn_subtask` generates simple prompts (no coordination instructions)
+4. **Parallel work** - Task agents do work, return structured JSON
+5. **Handle completion** - `swarm_complete_subtask` closes beads, creates issue beads
+6. **Cleanup** - `beads_sync` pushes to git
 
 ## Error Handling
 
