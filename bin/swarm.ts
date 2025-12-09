@@ -457,9 +457,32 @@ async function checkAllDependencies(): Promise<CheckResult[]> {
 // File Templates
 // ============================================================================
 
-const PLUGIN_WRAPPER = `import { SwarmPlugin } from "opencode-swarm-plugin"
+/**
+ * Get the plugin wrapper template
+ *
+ * Reads from examples/plugin-wrapper-template.ts which contains a self-contained
+ * plugin that shells out to the `swarm` CLI for all tool execution.
+ */
+function getPluginWrapper(): string {
+  const templatePath = join(
+    __dirname,
+    "..",
+    "examples",
+    "plugin-wrapper-template.ts",
+  );
+  try {
+    return readFileSync(templatePath, "utf-8");
+  } catch (error) {
+    // Fallback to minimal wrapper if template not found (shouldn't happen in normal install)
+    console.warn(
+      `[swarm] Could not read plugin template from ${templatePath}, using minimal wrapper`,
+    );
+    return `// Minimal fallback - install opencode-swarm-plugin globally for full functionality
+import { SwarmPlugin } from "opencode-swarm-plugin"
 export default SwarmPlugin
 `;
+  }
+}
 
 const SWARM_COMMAND = `---
 description: Decompose task into parallel subtasks and coordinate agents
@@ -961,7 +984,7 @@ async function setup() {
     }
   }
 
-  writeFileSync(pluginPath, PLUGIN_WRAPPER);
+  writeFileSync(pluginPath, getPluginWrapper());
   p.log.success("Plugin: " + pluginPath);
 
   writeFileSync(commandPath, SWARM_COMMAND);
@@ -1180,7 +1203,13 @@ ${cyan("Commands:")}
   swarm config    Show paths to generated config files
   swarm update    Update to latest version
   swarm version   Show version and banner
+  swarm tool      Execute a tool (for plugin wrapper)
   swarm help      Show this help
+
+${cyan("Tool Execution:")}
+  swarm tool --list                    List all available tools
+  swarm tool <name>                    Execute tool with no args
+  swarm tool <name> --json '<args>'    Execute tool with JSON args
 
 ${cyan("Usage in OpenCode:")}
   /swarm "Add user authentication with OAuth"
@@ -1200,6 +1229,150 @@ ${dim("Docs: https://github.com/joelhooks/opencode-swarm-plugin")}
   // Check for updates (non-blocking)
   const updateInfo = await checkForUpdates();
   if (updateInfo) showUpdateNotification(updateInfo);
+}
+
+// ============================================================================
+// Tool Execution (for plugin wrapper)
+// ============================================================================
+
+/**
+ * Execute a tool by name with JSON args
+ *
+ * This is the bridge between the plugin wrapper and the actual tool implementations.
+ * The plugin wrapper shells out to `swarm tool <name> --json '<args>'` and this
+ * function executes the tool and returns JSON.
+ *
+ * Exit codes:
+ * - 0: Success
+ * - 1: Tool execution error (error details in JSON output)
+ * - 2: Unknown tool name
+ * - 3: Invalid JSON args
+ */
+async function executeTool(toolName: string, argsJson?: string) {
+  // Lazy import to avoid loading all tools on every CLI invocation
+  const { allTools } = await import("../src/index");
+
+  // Validate tool name
+  if (!(toolName in allTools)) {
+    const availableTools = Object.keys(allTools).sort();
+    console.log(
+      JSON.stringify({
+        success: false,
+        error: {
+          code: "UNKNOWN_TOOL",
+          message: `Unknown tool: ${toolName}`,
+          available_tools: availableTools,
+        },
+      }),
+    );
+    process.exit(2);
+  }
+
+  // Parse args
+  let args: Record<string, unknown> = {};
+  if (argsJson) {
+    try {
+      args = JSON.parse(argsJson);
+    } catch (e) {
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: "INVALID_JSON",
+            message: `Invalid JSON args: ${e instanceof Error ? e.message : String(e)}`,
+            raw_input: argsJson.slice(0, 200),
+          },
+        }),
+      );
+      process.exit(3);
+    }
+  }
+
+  // Create mock context for tools that need sessionID
+  // This mimics what OpenCode provides to plugins
+  const mockContext = {
+    sessionID: process.env.OPENCODE_SESSION_ID || `cli-${Date.now()}`,
+    messageID: process.env.OPENCODE_MESSAGE_ID || `msg-${Date.now()}`,
+    agent: process.env.OPENCODE_AGENT || "cli",
+    abort: new AbortController().signal,
+  };
+
+  // Get the tool
+  const toolDef = allTools[toolName as keyof typeof allTools];
+
+  // Execute tool
+  // Note: We cast args to any because the CLI accepts arbitrary JSON
+  // The tool's internal Zod validation will catch type errors
+  try {
+    const result = await toolDef.execute(args as any, mockContext);
+
+    // If result is already valid JSON, try to parse and re-wrap it
+    // Otherwise wrap the string result
+    try {
+      const parsed = JSON.parse(result);
+      // If it's already a success/error response, pass through
+      if (typeof parsed === "object" && "success" in parsed) {
+        console.log(JSON.stringify(parsed));
+      } else {
+        console.log(JSON.stringify({ success: true, data: parsed }));
+      }
+    } catch {
+      // Result is a plain string, wrap it
+      console.log(JSON.stringify({ success: true, data: result }));
+    }
+    process.exit(0);
+  } catch (error) {
+    console.log(
+      JSON.stringify({
+        success: false,
+        error: {
+          code: error instanceof Error ? error.name : "TOOL_ERROR",
+          message: error instanceof Error ? error.message : String(error),
+          details:
+            error instanceof Error && "zodError" in error
+              ? (error as { zodError?: unknown }).zodError
+              : undefined,
+        },
+      }),
+    );
+    process.exit(1);
+  }
+}
+
+/**
+ * List all available tools
+ */
+async function listTools() {
+  const { allTools } = await import("../src/index");
+  const tools = Object.keys(allTools).sort();
+
+  console.log(yellow(BANNER));
+  console.log(dim("  " + TAGLINE + " v" + VERSION));
+  console.log();
+  console.log(cyan("Available tools:") + ` (${tools.length} total)`);
+  console.log();
+
+  // Group by prefix
+  const groups: Record<string, string[]> = {};
+  for (const tool of tools) {
+    const prefix = tool.split("_")[0];
+    if (!groups[prefix]) groups[prefix] = [];
+    groups[prefix].push(tool);
+  }
+
+  for (const [prefix, toolList] of Object.entries(groups)) {
+    console.log(green(`  ${prefix}:`));
+    for (const t of toolList) {
+      console.log(`    ${t}`);
+    }
+    console.log();
+  }
+
+  console.log(dim("Usage: swarm tool <name> [--json '<args>']"));
+  console.log(dim("Example: swarm tool beads_ready"));
+  console.log(
+    dim('Example: swarm tool beads_create --json \'{"title": "Fix bug"}\''),
+  );
 }
 
 // ============================================================================
@@ -1224,6 +1397,19 @@ switch (command) {
   case "update":
     await update();
     break;
+  case "tool": {
+    const toolName = process.argv[3];
+    if (!toolName || toolName === "--list" || toolName === "-l") {
+      await listTools();
+    } else {
+      // Look for --json flag
+      const jsonFlagIndex = process.argv.indexOf("--json");
+      const argsJson =
+        jsonFlagIndex !== -1 ? process.argv[jsonFlagIndex + 1] : undefined;
+      await executeTool(toolName, argsJson);
+    }
+    break;
+  }
   case "version":
   case "--version":
   case "-v":

@@ -280,6 +280,28 @@ export {
   type StrategyDefinition,
 } from "./swarm";
 
+// =============================================================================
+// Unified Tool Registry for CLI
+// =============================================================================
+
+/**
+ * All tools in a single registry for CLI tool execution
+ *
+ * This is used by `swarm tool <name>` command to dynamically execute tools.
+ * Each tool has an `execute` function that takes (args, ctx) and returns a string.
+ */
+export const allTools = {
+  ...beadsTools,
+  ...agentMailTools,
+  ...structuredTools,
+  ...swarmTools,
+} as const;
+
+/**
+ * Type for CLI tool names (all available tools)
+ */
+export type CLIToolName = keyof typeof allTools;
+
 /**
  * Re-export storage module
  *

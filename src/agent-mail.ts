@@ -62,9 +62,83 @@ export interface AgentMailState {
 // Module-level state (keyed by sessionID)
 // ============================================================================
 
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+} from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+
+/**
+ * Directory for persisting session state across CLI invocations
+ * This allows `swarm tool` commands to share state
+ */
+const SESSION_STATE_DIR =
+  process.env.SWARM_STATE_DIR || join(tmpdir(), "swarm-sessions");
+
+/**
+ * Get the file path for a session's state
+ */
+function getSessionStatePath(sessionID: string): string {
+  // Sanitize sessionID to be filesystem-safe
+  const safeID = sessionID.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return join(SESSION_STATE_DIR, `${safeID}.json`);
+}
+
+/**
+ * Load session state from disk
+ */
+function loadSessionState(sessionID: string): AgentMailState | null {
+  const path = getSessionStatePath(sessionID);
+  try {
+    if (existsSync(path)) {
+      const data = readFileSync(path, "utf-8");
+      return JSON.parse(data) as AgentMailState;
+    }
+  } catch (error) {
+    // File might be corrupted or inaccessible - ignore and return null
+    console.warn(`[agent-mail] Could not load session state: ${error}`);
+  }
+  return null;
+}
+
+/**
+ * Save session state to disk
+ */
+function saveSessionState(sessionID: string, state: AgentMailState): void {
+  try {
+    // Ensure directory exists
+    if (!existsSync(SESSION_STATE_DIR)) {
+      mkdirSync(SESSION_STATE_DIR, { recursive: true });
+    }
+    const path = getSessionStatePath(sessionID);
+    writeFileSync(path, JSON.stringify(state, null, 2));
+  } catch (error) {
+    // Non-fatal - state just won't persist
+    console.warn(`[agent-mail] Could not save session state: ${error}`);
+  }
+}
+
+/**
+ * Delete session state from disk
+ */
+function deleteSessionState(sessionID: string): void {
+  const path = getSessionStatePath(sessionID);
+  try {
+    if (existsSync(path)) {
+      unlinkSync(path);
+    }
+  } catch {
+    // Ignore errors on cleanup
+  }
+}
+
 /**
  * State storage keyed by sessionID.
- * Since ToolContext doesn't have persistent state, we use a module-level map.
+ * In-memory cache that also persists to disk for CLI usage.
  */
 const sessionStates = new Map<string, AgentMailState>();
 
@@ -691,9 +765,23 @@ export async function mcpCall<T>(
 
 /**
  * Get Agent Mail state for a session, or throw if not initialized
+ *
+ * Checks in-memory cache first, then falls back to disk storage.
+ * This allows CLI invocations to share state across calls.
  */
 function requireState(sessionID: string): AgentMailState {
-  const state = sessionStates.get(sessionID);
+  // Check in-memory cache first
+  let state = sessionStates.get(sessionID);
+
+  // If not in memory, try loading from disk
+  if (!state) {
+    state = loadSessionState(sessionID) ?? undefined;
+    if (state) {
+      // Cache in memory for subsequent calls in same process
+      sessionStates.set(sessionID, state);
+    }
+  }
+
   if (!state) {
     throw new AgentMailNotInitializedError();
   }
@@ -702,23 +790,38 @@ function requireState(sessionID: string): AgentMailState {
 
 /**
  * Store Agent Mail state for a session
+ *
+ * Saves to both in-memory cache and disk for CLI persistence.
  */
 function setState(sessionID: string, state: AgentMailState): void {
   sessionStates.set(sessionID, state);
+  saveSessionState(sessionID, state);
 }
 
 /**
  * Get state if exists (for cleanup hooks)
+ *
+ * Checks in-memory cache first, then falls back to disk storage.
  */
 function getState(sessionID: string): AgentMailState | undefined {
-  return sessionStates.get(sessionID);
+  let state = sessionStates.get(sessionID);
+  if (!state) {
+    state = loadSessionState(sessionID) ?? undefined;
+    if (state) {
+      sessionStates.set(sessionID, state);
+    }
+  }
+  return state;
 }
 
 /**
  * Clear state for a session
+ *
+ * Removes from both in-memory cache and disk.
  */
 function clearState(sessionID: string): void {
   sessionStates.delete(sessionID);
+  deleteSessionState(sessionID);
 }
 
 // ============================================================================
