@@ -210,6 +210,7 @@ export type DecompositionStrategy =
   | "file-based"
   | "feature-based"
   | "risk-based"
+  | "research-based"
   | "auto";
 
 /**
@@ -316,7 +317,6 @@ export const STRATEGIES: Record<
       "patch",
       "audit",
       "review",
-      "investigate",
     ],
     guidelines: [
       "Write tests FIRST to capture expected behavior",
@@ -334,6 +334,48 @@ export const STRATEGIES: Record<
       "Fix auth bypass → [Add regression test, Fix vulnerability, Audit similar endpoints]",
       "Fix race condition → [Add test reproducing issue, Implement fix, Add concurrency tests]",
       "Security audit → [Scan for vulnerabilities, Fix critical issues, Document remaining risks]",
+    ],
+  },
+  "research-based": {
+    name: "research-based",
+    description:
+      "Parallel search across multiple sources, then synthesize. Best for investigation, learning, and discovery tasks.",
+    keywords: [
+      "research",
+      "investigate",
+      "explore",
+      "find",
+      "discover",
+      "understand",
+      "learn",
+      "analyze",
+      "what",
+      "how",
+      "why",
+      "compare",
+      "evaluate",
+      "study",
+      "look up",
+      "search",
+    ],
+    guidelines: [
+      "Split by information source (PDFs, repos, history, web)",
+      "Each agent searches with different query angles",
+      "Include a synthesis subtask that depends on all search subtasks",
+      "Use pdf-brain for documentation/books if available",
+      "Use repo-crawl for GitHub repos if URL provided",
+      "Use cass for past agent session history",
+      "Assign NO files to research subtasks (read-only)",
+    ],
+    antiPatterns: [
+      "Don't have one agent search everything sequentially",
+      "Don't skip synthesis - raw search results need consolidation",
+      "Don't forget to check tool availability before assigning sources",
+    ],
+    examples: [
+      "Research auth patterns → [Search PDFs, Search repos, Search history, Synthesize]",
+      "Investigate error → [Search cass for similar errors, Search repo for error handling, Synthesize]",
+      "Learn about library → [Search docs, Search examples, Search issues, Synthesize findings]",
     ],
   },
 };
@@ -360,6 +402,7 @@ export function selectStrategy(task: string): {
     "file-based": 0,
     "feature-based": 0,
     "risk-based": 0,
+    "research-based": 0,
   };
 
   for (const [strategyName, definition] of Object.entries(STRATEGIES)) {
@@ -1900,7 +1943,7 @@ export const swarm_record_outcome = tool({
         "Criteria to generate feedback for (default: all default criteria)",
       ),
     strategy: tool.schema
-      .enum(["file-based", "feature-based", "risk-based"])
+      .enum(["file-based", "feature-based", "risk-based", "research-based"])
       .optional()
       .describe("Decomposition strategy used for this task"),
   },

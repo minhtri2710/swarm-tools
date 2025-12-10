@@ -111,6 +111,7 @@ export const DecompositionStrategySchema = z.enum([
   "file-based",
   "feature-based",
   "risk-based",
+  "research-based",
 ]);
 export type DecompositionStrategy = z.infer<typeof DecompositionStrategySchema>;
 
