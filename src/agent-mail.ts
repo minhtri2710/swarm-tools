@@ -880,53 +880,88 @@ export const agentmail_init = tool({
       );
     }
 
-    // Proactive health check - if server is unhealthy, try restart before proceeding
-    const functional = await isServerFunctional();
-    if (!functional) {
-      console.warn(
-        "[agent-mail] Server unhealthy on init, attempting restart...",
-      );
-      const restarted = await restartServer();
-      if (!restarted) {
-        return JSON.stringify(
-          {
-            error: "Agent Mail server unhealthy and restart failed",
-            available: false,
-            hint: "Manually restart Agent Mail: pkill -f agent-mail && agent-mail serve",
-            fallback: "Swarm will continue without multi-agent coordination.",
-          },
-          null,
-          2,
+    // Retry loop with restart on failure
+    const MAX_INIT_RETRIES = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= MAX_INIT_RETRIES; attempt++) {
+      try {
+        // 1. Ensure project exists
+        const project = await mcpCall<ProjectInfo>("ensure_project", {
+          human_key: args.project_path,
+        });
+
+        // 2. Register agent
+        const agent = await mcpCall<AgentInfo>("register_agent", {
+          project_key: args.project_path,
+          program: "opencode",
+          model: "claude-opus-4",
+          name: args.agent_name, // undefined = auto-generate
+          task_description: args.task_description || "",
+        });
+
+        // 3. Store state using sessionID
+        const state: AgentMailState = {
+          projectKey: args.project_path,
+          agentName: agent.name,
+          reservations: [],
+          startedAt: new Date().toISOString(),
+        };
+        setState(ctx.sessionID, state);
+
+        // Success - if we retried, log it
+        if (attempt > 1) {
+          console.warn(
+            `[agent-mail] Init succeeded on attempt ${attempt} after restart`,
+          );
+        }
+
+        return JSON.stringify({ project, agent, available: true }, null, 2);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const isUnexpectedError = lastError.message
+          .toLowerCase()
+          .includes("unexpected error");
+
+        console.warn(
+          `[agent-mail] Init attempt ${attempt}/${MAX_INIT_RETRIES} failed: ${lastError.message}`,
         );
+
+        // If it's an "unexpected error" and we have retries left, restart and retry
+        if (isUnexpectedError && attempt < MAX_INIT_RETRIES) {
+          console.warn(
+            "[agent-mail] Detected 'unexpected error', restarting server...",
+          );
+          const restarted = await restartServer();
+          if (restarted) {
+            // Clear cache and retry
+            agentMailAvailable = null;
+            consecutiveFailures = 0;
+            // Small delay to let server stabilize
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            continue;
+          }
+        }
+
+        // For non-unexpected errors or if restart failed, don't retry
+        if (!isUnexpectedError) {
+          break;
+        }
       }
-      // Clear cache after restart
-      agentMailAvailable = null;
     }
 
-    // 1. Ensure project exists
-    const project = await mcpCall<ProjectInfo>("ensure_project", {
-      human_key: args.project_path,
-    });
-
-    // 2. Register agent
-    const agent = await mcpCall<AgentInfo>("register_agent", {
-      project_key: args.project_path,
-      program: "opencode",
-      model: "claude-opus-4",
-      name: args.agent_name, // undefined = auto-generate
-      task_description: args.task_description || "",
-    });
-
-    // 3. Store state using sessionID
-    const state: AgentMailState = {
-      projectKey: args.project_path,
-      agentName: agent.name,
-      reservations: [],
-      startedAt: new Date().toISOString(),
-    };
-    setState(ctx.sessionID, state);
-
-    return JSON.stringify({ project, agent, available: true }, null, 2);
+    // All retries exhausted
+    return JSON.stringify(
+      {
+        error: `Agent Mail init failed after ${MAX_INIT_RETRIES} attempts`,
+        available: false,
+        lastError: lastError?.message,
+        hint: "Manually restart Agent Mail: pkill -f agent-mail && agent-mail serve",
+        fallback: "Swarm will continue without multi-agent coordination.",
+      },
+      null,
+      2,
+    );
   },
 });
 
