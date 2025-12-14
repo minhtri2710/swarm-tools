@@ -109,7 +109,7 @@ That's what Swarm does.
 
 5. **It spawns parallel workers**:
    - Each worker reserves its files (no conflicts)
-   - Workers can message each other via Agent Mail
+   - Workers coordinate via Swarm Mail (actor-model messaging)
    - Progress is checkpointed at 25%, 50%, 75%
 
 6. **It learns from the outcome**:
@@ -236,7 +236,84 @@ Workers don't just run in parallel - they coordinate via **Swarm Mail**, an even
 
 All coordination state survives context compaction and session restarts.
 
-> **Architecture deep-dive:** See [Swarm Mail Architecture](docs/swarm-mail-architecture.md) for implementation details, actor patterns, and event schemas.
+#### Architecture: 3-Tier Stack
+
+Swarm Mail is built on **Durable Streams primitives** (inspired by Kyle Matthews' [Electric SQL patterns](https://x.com/kylemathews/status/1999896667030700098)):
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     SWARM MAIL STACK                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  TIER 3: COORDINATION                                       │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  ask<Req, Res>() - Request/Response (RPC-style)       │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                          │                                  │
+│  TIER 2: PATTERNS        ▼                                  │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ DurableMailbox  │  │  DurableLock    │                  │
+│  │ Actor Inbox     │  │  File Mutex     │                  │
+│  └─────────────────┘  └─────────────────┘                  │
+│          │                    │                             │
+│  TIER 1: PRIMITIVES           ▼                             │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ DurableCursor   │  │ DurableDeferred │                  │
+│  │ Checkpointed    │  │ Distributed     │                  │
+│  │ Reader          │  │ Promise         │                  │
+│  └─────────────────┘  └─────────────────┘                  │
+│                          │                                  │
+│  STORAGE                 ▼                                  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │      PGLite (Embedded Postgres) + Migrations          │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Tier 1 - Primitives:**
+
+- **DurableCursor** - Positioned event stream consumption with checkpointing (exactly-once)
+- **DurableDeferred** - URL-addressable distributed promises for async coordination
+- **DurableLock** - CAS-based mutual exclusion for file reservations (TTL + retry/backoff)
+
+**Tier 2 - Patterns:**
+
+- **DurableMailbox** - Actor inbox with typed envelopes (sender, replyTo, payload)
+- File reservation protocol built on DurableLock
+
+**Tier 3 - Coordination:**
+
+- **ask()** pattern - Synchronous-style RPC over async streams (creates DurableDeferred, appends to mailbox, returns promise)
+
+#### Message Flow Example
+
+```
+Agent A                    Event Stream                Agent B
+   │                            │                         │
+   │  ask("get SessionUser")    │                         │
+   ├───────────────────────────>│                         │
+   │  (creates deferred)        │                         │
+   │                            │   consume event         │
+   │                            ├────────────────────────>│
+   │                            │                         │
+   │                            │   reply to deferred     │
+   │                            │<────────────────────────┤
+   │  await deferred.value      │                         │
+   │<───────────────────────────┤                         │
+   │                            │                         │
+   │  SessionUser interface     │                         │
+   │                            │                         │
+```
+
+**Why this matters:**
+
+- No external servers (Redis, Kafka, NATS) - just PGlite
+- Full audit trail - every message is an event
+- Resumable - cursors checkpoint position, survive crashes
+- Type-safe - Effect-TS with full inference
+
+> **Architecture deep-dive:** See [Swarm Mail Architecture](docs/swarm-mail-architecture.md) for complete implementation details, database schemas, and Effect-TS patterns.
 
 ### It Has Skills
 
@@ -358,47 +435,7 @@ Materialized Views (derived from events)
 - **Debugging** - see exactly what went wrong
 - **Learning** - analyze outcomes over time
 
-### Durable Primitives
-
-Built on Electric SQL patterns:
-
-**DurableCursor** - positioned consumer with checkpointing
-
-```typescript
-const cursor = await DurableCursor.create(stream, "my-checkpoint");
-const events = await cursor.read(10); // Read 10 events
-await cursor.checkpoint(events.length); // Save position
-```
-
-**DurableDeferred** - distributed promise with TTL
-
-```typescript
-const deferred = await DurableDeferred.create<Response>();
-// Send deferred.url to another agent
-const response = await deferred.value; // Waits for resolution
-```
-
-**DurableLock** - distributed mutex with TTL
-
-```typescript
-const lock = await DurableLock.acquire("resource-id", { ttl: 60000 });
-// Do work
-await lock.release();
-```
-
-**DurableMailbox** - actor inbox with typed messages
-
-```typescript
-const mailbox = await DurableMailbox.create<Message>("agent-name");
-const messages = await mailbox.receive(5); // Get 5 messages
-```
-
-These primitives enable:
-
-- **Exactly-once processing** (cursor checkpointing)
-- **Request/response** (ask pattern via deferred + mailbox)
-- **Exclusive access** (locks for file reservations)
-- **Actor coordination** (mailboxes for agent communication)
+See the [Swarm Mail Architecture](docs/swarm-mail-architecture.md) section above for details on the durable primitives (DurableCursor, DurableDeferred, DurableLock, DurableMailbox) and how they enable exactly-once processing, request/response patterns, and actor coordination.
 
 ## Dependencies
 
