@@ -313,7 +313,7 @@ Agent A                    Event Stream                Agent B
 - Resumable - cursors checkpoint position, survive crashes
 - Type-safe - Effect-TS with full inference
 
-> **Architecture deep-dive:** See [Swarm Mail Architecture](docs/swarm-mail-architecture.md) for complete implementation details, database schemas, and Effect-TS patterns.
+> **Architecture deep-dive:** See [Swarm Mail Architecture](packages/opencode-swarm-plugin/docs/swarm-mail-architecture.md) for complete implementation details, database schemas, and Effect-TS patterns.
 
 ### It Has Skills
 
@@ -344,6 +344,42 @@ Skills can include:
 - Code examples
 - Reference documentation
 - Executable scripts
+
+## Monorepo Structure
+
+This is a Bun + Turborepo monorepo with two packages:
+
+```
+opencode-swarm-plugin/
+├── packages/
+│   ├── swarm-mail/              # Event sourcing primitives
+│   │   └── src/streams/         # DurableMailbox, DurableLock, etc.
+│   └── opencode-swarm-plugin/   # Main plugin
+│       ├── src/                 # Plugin tools
+│       ├── global-skills/       # Bundled skills
+│       └── docs/                # Architecture docs
+├── package.json                 # Workspace root
+└── turbo.json                   # Pipeline config
+```
+
+### swarm-mail
+
+Standalone event sourcing package for multi-agent coordination:
+
+- `EventStore` - append-only event log with PGLite
+- `Projections` - materialized views (agents, messages, reservations)
+- Effect-TS durable primitives (DurableMailbox, DurableCursor, DurableLock, DurableDeferred)
+- `DatabaseAdapter` interface for dependency injection
+
+### opencode-swarm-plugin
+
+OpenCode plugin providing:
+
+- Beads integration (git-backed issue tracking)
+- Swarm coordination (task decomposition, parallel agents)
+- Agent Mail (inter-agent messaging)
+- Learning system (pattern maturity, anti-pattern detection)
+- Skills system (knowledge injection)
 
 ## Install
 
@@ -435,7 +471,7 @@ Materialized Views (derived from events)
 - **Debugging** - see exactly what went wrong
 - **Learning** - analyze outcomes over time
 
-See the [Swarm Mail Architecture](docs/swarm-mail-architecture.md) section above for details on the durable primitives (DurableCursor, DurableDeferred, DurableLock, DurableMailbox) and how they enable exactly-once processing, request/response patterns, and actor coordination.
+See the [Swarm Mail Architecture](packages/opencode-swarm-plugin/docs/swarm-mail-architecture.md) section above for details on the durable primitives (DurableCursor, DurableDeferred, DurableLock, DurableMailbox) and how they enable exactly-once processing, request/response patterns, and actor coordination.
 
 ## Dependencies
 
@@ -459,11 +495,27 @@ swarm config    # Show config file paths
 ## Development
 
 ```bash
+# Install all workspace dependencies
 bun install
-bun test                # Unit tests (230 tests)
-bun run test:integration # Integration tests
-bun run build
+
+# Build all packages (respects dependency order)
+bun turbo build
+
+# Test all packages
+bun turbo test
+
+# Typecheck all packages
+bun turbo typecheck
+
+# Build/test specific package
+bun turbo build --filter=swarm-mail
+bun turbo test --filter=opencode-swarm-plugin
+
+# Add dependency to specific package
+cd packages/swarm-mail && bun add zod
 ```
+
+See [AGENTS.md](./AGENTS.md) for detailed monorepo guidance.
 
 ## Credits
 
