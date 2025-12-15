@@ -37,3 +37,4 @@ npm-debug.log*
 .opencode/*.data
 .opencode/node_modules/
 .opencode/bun.lock
+.npmrc
