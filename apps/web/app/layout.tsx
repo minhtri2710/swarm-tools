@@ -21,9 +21,50 @@ const ibmPlexMono = IBM_Plex_Mono({
 	variable: '--font-ibm-plex-mono',
 });
 
+const siteUrl = 'https://swarmtools.ai';
+
 export const metadata: Metadata = {
-	title: 'Swarm Tools',
-	description: 'Framework-agnostic primitives for agentic systems',
+	metadataBase: new URL(siteUrl),
+	title: {
+		default: 'Swarm Tools',
+		template: '%s | Swarm Tools',
+	},
+	description: 'framework-agnostic primitives for agentic systems. Event sourcing, multi-agent coordination, and durable execution patterns for AI coding assistants.',
+	keywords: ['swarm', 'multi-agent', 'AI', 'event sourcing', 'coordination', 'Effect-TS', 'OpenCode', 'agentic'],
+	authors: [{ name: 'Joel Hooks', url: 'https://github.com/joelhooks' }],
+	creator: 'Joel Hooks',
+	publisher: 'Swarm Tools',
+	robots: {
+		index: true,
+		follow: true,
+	},
+	openGraph: {
+		type: 'website',
+		locale: 'en_US',
+		url: siteUrl,
+		siteName: 'Swarm Tools',
+		title: 'Swarm Tools',
+		description: 'framework-agnostic primitives for agentic systems',
+		images: [
+			{
+				url: '/opengraph-image',
+				width: 1200,
+				height: 630,
+				alt: 'Swarm Tools - framework-agnostic primitives for agentic systems',
+			},
+		],
+	},
+	twitter: {
+		card: 'summary_large_image',
+		title: 'Swarm Tools',
+		description: 'framework-agnostic primitives for agentic systems',
+		images: ['/opengraph-image'],
+		creator: '@jhooks',
+	},
+	icons: {
+		icon: '/icon',
+		apple: '/icon',
+	},
 };
 
 const consoleArt = `
