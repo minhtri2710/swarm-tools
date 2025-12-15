@@ -1218,8 +1218,26 @@ Continuing with completion, but this should be fixed for future subtasks.`;
           .nothrow();
 
       if (closeResult.exitCode !== 0) {
-        throw new Error(
-          `Failed to close bead because bd close command failed: ${closeResult.stderr.toString()}. Try: Verify bead exists and is not already closed with 'bd show ${args.bead_id}', check if bead ID is correct with 'beads_query()', or use beads_close tool directly.`,
+        const stderrOutput = closeResult.stderr.toString().trim();
+        return JSON.stringify(
+          {
+            success: false,
+            error: "Failed to close bead",
+            failed_step: "bd close",
+            details: stderrOutput || "Unknown error from bd close command",
+            bead_id: args.bead_id,
+            recovery: {
+              steps: [
+                `1. Check bead exists: bd show ${args.bead_id}`,
+                `2. Check bead status (might already be closed): beads_query()`,
+                `3. If bead is blocked, unblock first: beads_update(id="${args.bead_id}", status="in_progress")`,
+                `4. Try closing directly: beads_close(id="${args.bead_id}", reason="...")`,
+              ],
+              hint: "If bead is in 'blocked' status, you must change it to 'in_progress' or 'open' before closing.",
+            },
+          },
+          null,
+          2,
         );
       }
 
@@ -1479,6 +1497,7 @@ Files touched: ${args.files_touched?.join(", ") || "none recorded"}`,
         .join("\n");
 
       // Send urgent notification to coordinator
+      let notificationSent = false;
       try {
         await sendSwarmMessage({
           projectPath: args.project_key,
@@ -1489,6 +1508,7 @@ Files touched: ${args.files_touched?.join(", ") || "none recorded"}`,
           threadId: epicId,
           importance: "urgent",
         });
+        notificationSent = true;
       } catch (mailError) {
         // Even swarm mail failed - log to console as last resort
         console.error(
@@ -1498,8 +1518,41 @@ Files touched: ${args.files_touched?.join(", ") || "none recorded"}`,
         console.error(`[swarm_complete] Original error:`, error);
       }
 
-      // Re-throw the original error after notifying
-      throw error;
+      // Return structured error instead of throwing
+      // This ensures the agent sees the actual error message
+      return JSON.stringify(
+        {
+          success: false,
+          error: errorMessage,
+          failed_step: failedStep,
+          bead_id: args.bead_id,
+          agent_name: args.agent_name,
+          coordinator_notified: notificationSent,
+          stack_trace: errorStack?.slice(0, 500),
+          context: {
+            summary: args.summary,
+            files_touched: args.files_touched || [],
+            skip_ubs_scan: args.skip_ubs_scan ?? false,
+            skip_verification: args.skip_verification ?? false,
+          },
+          recovery: {
+            steps: [
+              "1. Check the error message above for specific issue",
+              `2. Review failed step: ${failedStep}`,
+              "3. Fix underlying issue or use skip flags if appropriate",
+              "4. Retry swarm_complete after fixing",
+            ],
+            common_fixes: {
+              "Verification Gate": "Use skip_verification=true to bypass (not recommended)",
+              "UBS scan": "Use skip_ubs_scan=true to bypass",
+              "Bead close": "Check bead status with beads_query(), may need beads_update() first",
+              "Self-evaluation": "Check evaluation JSON format matches EvaluationSchema",
+            },
+          },
+        },
+        null,
+        2,
+      );
     }
   },
 });
