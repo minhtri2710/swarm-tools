@@ -68,9 +68,17 @@ Under the hood, it uses **swarm-mail** for event sourcing and actor-model messag
 
 ## What Makes It Different
 
-**1. Survives Context Death**
+**1. Survives Context Death** ✅ *[Proven - 9 integration tests]*
 
-Agents checkpoint progress at 25%, 50%, 75%. When context compaction happens, work resumes from the last checkpoint—no lost progress.
+When `swarm_progress` reports 25%, 50%, or 75% completion, an automatic checkpoint is created and stored in PGLite (embedded Postgres). If context compaction happens or an agent crashes, `swarm_recover` retrieves the last checkpoint with:
+
+- Files modified so far
+- Current strategy (file-based, feature-based, risk-based)
+- Progress percentage
+- Coordinator directives (shared context, skills to load, notes)
+- Error context (if checkpoint happened during error handling)
+
+No external database needed—checkpoints persist in `.swarm-mail/` directory. Non-fatal failures mean work continues even if checkpoint fails.
 
 **2. Learns From Outcomes**
 
@@ -86,6 +94,67 @@ Bundled knowledge packages for common domains:
 - `swarm-coordination` - Multi-agent orchestration
 - `cli-builder` - Argument parsing, help text, subcommands
 - `learning-systems` - Confidence decay, pattern maturity
+
+## Checkpoint & Recovery
+
+The checkpoint system ensures no work is lost during context compaction or crashes.
+
+### How It Works
+
+**Automatic Checkpoints** - When `swarm_progress` reports:
+- 25% completion → First checkpoint saved
+- 50% completion → Midpoint checkpoint saved
+- 75% completion → Near-completion checkpoint saved
+
+Each checkpoint stores:
+```typescript
+{
+  files: ["src/auth.ts", "src/middleware.ts"],
+  strategy: "file-based",
+  progress_percent: 50,
+  directives: {
+    shared_context: "OAuth implementation notes",
+    skills_to_load: ["testing-patterns"],
+    coordinator_notes: "Watch for race conditions"
+  },
+  recovery: {
+    last_checkpoint: 1234567890,
+    files_modified: ["src/auth.ts"],
+    error_context: "Optional: errors encountered"
+  }
+}
+```
+
+**Manual Checkpoints** - Workers can also create checkpoints explicitly:
+```typescript
+swarm_checkpoint({
+  project_key: "/path/to/project",
+  agent_name: "WorkerA",
+  bead_id: "bd-123.1",
+  epic_id: "bd-123",
+  files_modified: ["src/auth.ts"],
+  progress_percent: 30,
+  directives: { /* optional */ },
+  error_context: "Optional error details"
+})
+```
+
+**Recovery** - Resume from last checkpoint:
+```typescript
+swarm_recover({
+  project_key: "/path/to/project",
+  epic_id: "bd-123"
+})
+// Returns: { found: true, context: { ... }, age_seconds: 120 }
+```
+
+### Storage
+
+Checkpoints are stored in PGLite (embedded Postgres) at `.swarm-mail/` in your project directory. No external database needed. The `swarm_contexts` table tracks all checkpoints with full event sourcing for audit trail.
+
+### Failure Handling
+
+Checkpoint failures are **non-fatal**—if a checkpoint fails, work continues. You'll see a warning in logs but the agent keeps going. This prevents checkpoint infrastructure from blocking actual work.
 
 ## Quick Start
 
