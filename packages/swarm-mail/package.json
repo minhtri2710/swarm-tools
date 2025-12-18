@@ -27,7 +27,7 @@
   "license": "MIT",
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node --external @electric-sql/pglite --external postgres && tsc",
-    "test": "bun test src/streams/ --timeout 60000",
+    "test": "bun test src/streams/ src/memory/ src/hive/ --timeout 60000",
     "test:beads": "bun test src/beads/ --timeout 60000",
     "test:integration": "vitest run src/streams/**/*.integration-test.ts --testTimeout 60000",
     "test:all": "bun test src/ --timeout 60000",

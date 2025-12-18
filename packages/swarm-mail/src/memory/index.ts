@@ -27,3 +27,13 @@ export { createMemoryStore, EMBEDDING_DIM } from "./store.js";
 
 // Migrations
 export { memoryMigration, memoryMigrations } from "./migrations.js";
+
+// Legacy migration tool
+export {
+	getDefaultLegacyPath,
+	getMigrationStatus,
+	legacyDatabaseExists,
+	migrateLegacyMemories,
+	type MigrationOptions,
+	type MigrationResult,
+} from "./migrate-legacy.js";

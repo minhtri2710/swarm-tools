@@ -15,7 +15,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite/vector";
 import { runMigrations } from "../streams/migrations.js";
-import { beadsMigration } from "./migrations.js";
 import type { DatabaseAdapter } from "../types/database.js";
 import {
   getCell,
@@ -57,17 +56,8 @@ describe("Beads Migrations", () => {
     pglite = await PGlite.create({ extensions: { vector } });
     db = wrapPGlite(pglite);
 
-    // Run base migrations (v1-v5)
+    // Run all migrations (0-9, includes beads/hive migrations 7-8)
     await runMigrations(pglite);
-
-    // Run beads migration (v6)
-    await pglite.exec("BEGIN");
-    await pglite.exec(beadsMigration.up);
-    await pglite.query(
-      `INSERT INTO schema_version (version, applied_at, description) VALUES ($1, $2, $3)`,
-      [beadsMigration.version, Date.now(), beadsMigration.description],
-    );
-    await pglite.exec("COMMIT");
   });
 
   afterEach(async () => {
@@ -125,16 +115,9 @@ describe("Beads Projections", () => {
   beforeEach(async () => {
     pglite = await PGlite.create({ extensions: { vector } });
     db = wrapPGlite(pglite);
+    
+    // Run all migrations (0-9)
     await runMigrations(pglite);
-
-    // Run beads migration
-    await pglite.exec("BEGIN");
-    await pglite.exec(beadsMigration.up);
-    await pglite.query(
-      `INSERT INTO schema_version (version, applied_at, description) VALUES ($1, $2, $3)`,
-      [beadsMigration.version, Date.now(), beadsMigration.description],
-    );
-    await pglite.exec("COMMIT");
   });
 
   afterEach(async () => {

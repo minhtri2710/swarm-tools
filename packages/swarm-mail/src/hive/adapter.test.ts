@@ -16,7 +16,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite/vector";
-import { beadsMigration } from "./migrations.js";
+import { runMigrations } from "../streams/migrations.js";
 import type { DatabaseAdapter } from "../types/database.js";
 import { createHiveAdapter } from "./adapter.js";
 import type { HiveAdapter } from "../types/hive-adapter.js";
@@ -44,36 +44,10 @@ describe("Beads Adapter", () => {
     // Create isolated in-memory instance for tests
     pglite = await PGlite.create({ extensions: { vector } });
     
-    // Initialize the core events table
-    await pglite.exec(`
-      CREATE TABLE IF NOT EXISTS events (
-        id SERIAL PRIMARY KEY,
-        type TEXT NOT NULL,
-        project_key TEXT NOT NULL,
-        timestamp BIGINT NOT NULL,
-        sequence SERIAL,
-        data JSONB NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_events_project_key ON events(project_key);
-      CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
-      CREATE TABLE IF NOT EXISTS schema_version (
-        version INTEGER PRIMARY KEY,
-        applied_at BIGINT NOT NULL,
-        description TEXT
-      );
-    `);
+    // Run all migrations (0-9)
+    await runMigrations(pglite);
     
     db = wrapPGlite(pglite);
-
-    // Run beads migration
-    await pglite.exec("BEGIN");
-    await pglite.exec(beadsMigration.up);
-    await pglite.query(
-      `INSERT INTO schema_version (version, applied_at, description) VALUES ($1, $2, $3)`,
-      [beadsMigration.version, Date.now(), beadsMigration.description],
-    );
-    await pglite.exec("COMMIT");
 
     // Create adapter
     adapter = createHiveAdapter(db, projectKey);
