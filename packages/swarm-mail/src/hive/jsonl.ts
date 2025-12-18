@@ -490,7 +490,7 @@ async function importDependencies(
   const db = await adapter.getDatabase();
 
   // Clear existing dependencies
-  await db.query("DELETE FROM cell_dependencies WHERE cell_id = $1", [
+  await db.query("DELETE FROM bead_dependencies WHERE cell_id = $1", [
     cellExport.id,
   ]);
 
@@ -521,7 +521,7 @@ async function importLabels(
   const db = await adapter.getDatabase();
 
   // Clear existing labels
-  await db.query("DELETE FROM cell_labels WHERE cell_id = $1", [
+  await db.query("DELETE FROM bead_labels WHERE cell_id = $1", [
     cellExport.id,
   ]);
 
@@ -547,7 +547,7 @@ async function importComments(
   const db = await adapter.getDatabase();
 
   // Clear existing comments (simple approach - could be smarter)
-  await db.query("DELETE FROM cell_comments WHERE cell_id = $1", [
+  await db.query("DELETE FROM bead_comments WHERE cell_id = $1", [
     cellExport.id,
   ]);
 

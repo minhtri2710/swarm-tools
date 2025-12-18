@@ -533,7 +533,7 @@ export async function getBlockedCells(
   const result = await db.query<Cell & { blocker_ids: string[] }>(
     `SELECT b.*, bbc.blocker_ids 
      FROM beads b
-     JOIN blocked_beads_cache bbc ON b.id = bcc.cell_id
+     JOIN blocked_beads_cache bbc ON b.id = bbc.cell_id
      WHERE b.project_key = $1 AND b.deleted_at IS NULL
      ORDER BY b.priority DESC, b.created_at ASC`,
     [projectKey],

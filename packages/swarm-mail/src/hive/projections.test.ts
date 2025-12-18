@@ -82,21 +82,21 @@ describe("Beads Migrations", () => {
 
   test("migration creates bead_dependencies table", async () => {
     const result = await pglite.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name = 'cell_dependencies'`,
+      `SELECT table_name FROM information_schema.tables WHERE table_name = 'bead_dependencies'`,
     );
     expect(result.rows).toHaveLength(1);
   });
 
   test("migration creates bead_labels table", async () => {
     const result = await pglite.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name = 'cell_labels'`,
+      `SELECT table_name FROM information_schema.tables WHERE table_name = 'bead_labels'`,
     );
     expect(result.rows).toHaveLength(1);
   });
 
   test("migration creates bead_comments table", async () => {
     const result = await pglite.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name = 'cell_comments'`,
+      `SELECT table_name FROM information_schema.tables WHERE table_name = 'bead_comments'`,
     );
     expect(result.rows).toHaveLength(1);
   });
