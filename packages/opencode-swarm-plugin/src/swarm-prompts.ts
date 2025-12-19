@@ -46,7 +46,7 @@ Agents MUST update their cell status as they work. No silent progress.
 
 ## Requirements
 
-1. **Break into 2-{max_subtasks} independent subtasks** that can run in parallel
+1. **Break into independent subtasks** that can run in parallel (as many as needed)
 2. **Assign files** - each subtask must specify which files it will modify
 3. **No file overlap** - files cannot appear in multiple subtasks (they get exclusive locks)
 4. **Order by dependency** - if subtask B needs subtask A's output, A must come first in the array
@@ -123,7 +123,7 @@ Agents MUST update their cell status as they work. No silent progress.
 
 ## Requirements
 
-1. **Break into 2-{max_subtasks} independent subtasks** that can run in parallel
+1. **Break into independent subtasks** that can run in parallel (as many as needed)
 2. **Assign files** - each subtask must specify which files it will modify
 3. **No file overlap** - files cannot appear in multiple subtasks (they get exclusive locks)
 4. **Order by dependency** - if subtask B needs subtask A's output, A must come first in the array
@@ -927,10 +927,9 @@ export const swarm_plan_prompt = tool({
     max_subtasks: tool.schema
       .number()
       .int()
-      .min(2)
-      .max(10)
-      .default(5)
-      .describe("Maximum number of subtasks (default: 5)"),
+      .min(1)
+      .optional()
+      .describe("Suggested max subtasks (optional - LLM decides if not specified)"),
     context: tool.schema
       .string()
       .optional()
@@ -943,7 +942,6 @@ export const swarm_plan_prompt = tool({
       .number()
       .int()
       .min(1)
-      .max(10)
       .optional()
       .describe("Max CASS results to include (default: 3)"),
     include_skills: tool.schema
