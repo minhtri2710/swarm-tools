@@ -1,5 +1,29 @@
 # opencode-swarm-plugin
 
+## 0.31.3
+
+### Patch Changes
+
+- [`fdddd27`](https://github.com/joelhooks/swarm-tools/commit/fdddd27f9c8627f7de2b9f108827c66c7040b049) Thanks [@joelhooks](https://github.com/joelhooks)! - ## 🐝 Short Hashes Now Welcome
+
+  The WorkerHandoff schema was too strict - it rejected short project names and partial hashes.
+
+  **Before:** Required 3+ hyphen-separated segments (regex nightmare)
+
+  ```
+  /^[a-z0-9]+(-[a-z0-9]+){2,}(\.[\w-]+)?$/
+  ```
+
+  **After:** Any non-empty string, validated at runtime via `resolvePartialId()`
+
+  Now you can use:
+
+  - Full IDs: `opencode-swarm-monorepo-lf2p4u-mjd4pjujc7e`
+  - Short hashes: `mjd4pjujc7e`
+  - Partial hashes: `mjd4pjuj`
+
+  The hive tools already had smart ID resolution - we just needed to stop blocking it at the schema level.
+
 ## 0.31.2
 
 ### Patch Changes
