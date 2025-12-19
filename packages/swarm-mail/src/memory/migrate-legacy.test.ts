@@ -11,6 +11,7 @@ import {
   migrateLegacyMemories,
   getMigrationStatus,
   legacyDatabaseExists,
+  targetHasMemories,
 } from "./migrate-legacy.js";
 import { wrapPGlite } from "../pglite.js";
 import { runMigrations } from "../streams/migrations.js";
@@ -266,6 +267,33 @@ describe("Legacy Memory Migration", () => {
       expect(result.failed).toBe(1);
       expect(result.errors.length).toBeGreaterThan(0);
       expect(result.errors[0]).toContain("query");
+    });
+  });
+
+  describe("targetHasMemories", () => {
+    test("returns false for empty database", async () => {
+      const hasMemories = await targetHasMemories(wrapPGlite(targetDb));
+      expect(hasMemories).toBe(false);
+    });
+
+    test("returns true when memories exist", async () => {
+      // Insert a memory
+      await targetDb.query(
+        `INSERT INTO memories (id, content, collection) VALUES ($1, $2, $3)`,
+        ["mem-1", "Test memory", "default"],
+      );
+
+      const hasMemories = await targetHasMemories(wrapPGlite(targetDb));
+      expect(hasMemories).toBe(true);
+    });
+
+    test("returns false when table exists but is empty", async () => {
+      // Just ensure table is empty (it already is from setup)
+      const count = await targetDb.query<{ count: string }>(`SELECT COUNT(*) as count FROM memories`);
+      expect(parseInt(count.rows[0]?.count || "0")).toBe(0);
+
+      const hasMemories = await targetHasMemories(wrapPGlite(targetDb));
+      expect(hasMemories).toBe(false);
     });
   });
 });

@@ -39,6 +39,7 @@ import {
   legacyDatabaseExists,
   getMigrationStatus,
   migrateLegacyMemories,
+  targetHasMemories,
 } from "swarm-mail";
 import { getSwarmMail } from "swarm-mail";
 
@@ -1687,69 +1688,109 @@ async function setup() {
   if (legacyDatabaseExists()) {
     p.log.warn("Found legacy semantic-memory database");
     
-    const migrationStatus = await getMigrationStatus();
-    if (migrationStatus) {
-      const { total, withEmbeddings } = migrationStatus;
-      p.log.message(dim(`  Memories: ${total} total (${withEmbeddings} with embeddings)`));
-      p.log.message(dim(`  Will migrate to swarm-mail unified database`));
+    // Check if target database already has memories (already migrated)
+    let swarmMail = null;
+    try {
+      swarmMail = await getSwarmMail(cwd);
+      const targetDb = await swarmMail.getDatabase(cwd);
+      const alreadyMigrated = await targetHasMemories(targetDb);
       
-      const shouldMigrate = await p.confirm({
-        message: "Migrate to swarm-mail database? (recommended)",
-        initialValue: true,
-      });
-
-      if (p.isCancel(shouldMigrate)) {
-        p.cancel("Setup cancelled");
-        process.exit(0);
-      }
-
-      if (shouldMigrate) {
-        const migrateSpinner = p.spinner();
-        migrateSpinner.start("Connecting to target database...");
-        
-        try {
-          // Get swarm-mail database for this project
-          const swarmMail = await getSwarmMail(cwd);
-          const targetDb = await swarmMail.getDatabase(cwd);
-          migrateSpinner.message("Migrating memories...");
-          
-          // Run migration with progress updates
-          const result = await migrateLegacyMemories({
-            targetDb,
-            onProgress: (msg) => {
-              // Update spinner message for key milestones
-              if (msg.includes("complete") || msg.includes("Progress:")) {
-                migrateSpinner.message(msg.replace("[migrate] ", ""));
-              }
-            },
-          });
-          
-          migrateSpinner.stop("Semantic memory migration complete");
-          
-          if (result.migrated > 0) {
-            p.log.success(`Migrated ${result.migrated} memories to swarm-mail`);
-          }
-          if (result.skipped > 0) {
-            p.log.message(dim(`  Skipped ${result.skipped} (already exist)`));
-          }
-          if (result.failed > 0) {
-            p.log.warn(`Failed to migrate ${result.failed} memories`);
-            for (const error of result.errors.slice(0, 3)) {
-              p.log.message(dim(`  ${error}`));
-            }
-            if (result.errors.length > 3) {
-              p.log.message(dim(`  ... and ${result.errors.length - 3} more errors`));
-            }
-          }
-          
-          // Close the connection to allow process to exit
-          await swarmMail.close();
-        } catch (error) {
-          migrateSpinner.stop("Migration failed");
-          p.log.error(error instanceof Error ? error.message : String(error));
-        }
+      if (alreadyMigrated) {
+        p.log.message(dim("  Already migrated to swarm-mail"));
+        await swarmMail.close();
       } else {
-        p.log.warn("Skipping migration - legacy semantic-memory will continue to work but is deprecated");
+        await swarmMail.close();
+        swarmMail = null;
+        
+        // Target is empty - show migration status and prompt
+        const migrationStatus = await getMigrationStatus();
+        if (migrationStatus) {
+          const { total, withEmbeddings } = migrationStatus;
+          p.log.message(dim(`  Memories: ${total} total (${withEmbeddings} with embeddings)`));
+          p.log.message(dim(`  Will migrate to swarm-mail unified database`));
+          
+          const shouldMigrate = await p.confirm({
+            message: "Migrate to swarm-mail database? (recommended)",
+            initialValue: true,
+          });
+
+          if (p.isCancel(shouldMigrate)) {
+            p.cancel("Setup cancelled");
+            process.exit(0);
+          }
+
+          if (shouldMigrate) {
+            const migrateSpinner = p.spinner();
+            migrateSpinner.start("Connecting to target database...");
+            
+            try {
+              // Get swarm-mail database for this project
+              swarmMail = await getSwarmMail(cwd);
+              const targetDb = await swarmMail.getDatabase(cwd);
+              migrateSpinner.message("Migrating memories...");
+              
+              // Run migration with progress updates
+              const result = await migrateLegacyMemories({
+                targetDb,
+                onProgress: (msg) => {
+                  // Update spinner message for key milestones
+                  if (msg.includes("complete") || msg.includes("Progress:")) {
+                    migrateSpinner.message(msg.replace("[migrate] ", ""));
+                  }
+                },
+              });
+              
+              migrateSpinner.stop("Semantic memory migration complete");
+              
+              if (result.migrated > 0) {
+                p.log.success(`Migrated ${result.migrated} memories to swarm-mail`);
+              }
+              if (result.skipped > 0) {
+                p.log.message(dim(`  Skipped ${result.skipped} (already exist)`));
+              }
+              if (result.failed > 0) {
+                p.log.warn(`Failed to migrate ${result.failed} memories`);
+                for (const error of result.errors.slice(0, 3)) {
+                  p.log.message(dim(`  ${error}`));
+                }
+                if (result.errors.length > 3) {
+                  p.log.message(dim(`  ... and ${result.errors.length - 3} more errors`));
+                }
+              }
+              
+              // Close the connection to allow process to exit
+              await swarmMail.close();
+              swarmMail = null;
+            } catch (error) {
+              migrateSpinner.stop("Migration failed");
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              // Hide internal PGLite errors, only show user-actionable messages
+              if (!errorMsg.includes("NOTICE") && !errorMsg.includes("PGlite")) {
+                p.log.error(errorMsg);
+              } else {
+                p.log.warn("Migration encountered an error - please try again");
+              }
+              if (swarmMail) {
+                await swarmMail.close();
+                swarmMail = null;
+              }
+            }
+          } else {
+            p.log.warn("Skipping migration - legacy semantic-memory will continue to work but is deprecated");
+          }
+        }
+      }
+    } catch (error) {
+      // Failed to connect to target database - log and skip
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Hide internal PGLite errors
+      if (!errorMsg.includes("NOTICE") && !errorMsg.includes("PGlite")) {
+        p.log.message(dim(`  Could not check migration status: ${errorMsg}`));
+      } else {
+        p.log.message(dim("  Could not check migration status - skipping"));
+      }
+      if (swarmMail) {
+        await swarmMail.close();
       }
     }
   } else {

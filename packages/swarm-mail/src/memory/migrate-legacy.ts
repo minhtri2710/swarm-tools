@@ -318,3 +318,17 @@ export async function getMigrationStatus(
     await db.close();
   }
 }
+
+/**
+ * Check if target database already has memories
+ * Used to skip migration prompt if already migrated
+ *
+ * @param targetDb - Target database adapter
+ * @returns true if memories exist, false if empty
+ */
+export async function targetHasMemories(targetDb: DatabaseAdapter): Promise<boolean> {
+  const result = await targetDb.query<{ count: string }>(`
+    SELECT COUNT(*) as count FROM memories
+  `);
+  return parseInt(result.rows[0]?.count || "0") > 0;
+}

@@ -120,6 +120,7 @@ export {
   migrateLegacyMemories,
   getMigrationStatus,
   getDefaultLegacyPath,
+  targetHasMemories,
 } from "./memory/migrate-legacy";
 export type {
   MigrationOptions,
