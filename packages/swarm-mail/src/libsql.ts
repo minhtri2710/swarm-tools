@@ -75,7 +75,7 @@ export interface LibSQLConfig {
  * // result2.params = ["a", "b", "c"]
  * ```
  */
-function convertPlaceholders(
+export function convertPlaceholders(
 	sql: string,
 	params?: unknown[],
 ): { sql: string; params: unknown[] | undefined } {
@@ -92,22 +92,79 @@ function convertPlaceholders(
 		return { sql: sql.replace(/\$\d+/g, "?"), params };
 	}
 
-	// Find all placeholders and their indices
-	const placeholderRegex = /\$(\d+)/g;
-	const expandedParams: unknown[] = [];
-
-	// Collect placeholder indices in order of appearance
-	for (const match of sql.matchAll(placeholderRegex)) {
-		const paramIndex = Number.parseInt(match[1], 10) - 1; // $1 -> index 0
-		if (paramIndex >= 0 && paramIndex < params.length) {
-			expandedParams.push(params[paramIndex]);
+	// Pre-process: Identify which params are arrays used with ANY()
+	// Pattern: "= ANY($N)" where $N references an array param
+	const anyParamIndices = new Set<number>();
+	const anyRegex = /=\s*ANY\(\$(\d+)\)/gi;
+	for (const match of sql.matchAll(anyRegex)) {
+		const paramIndex = Number.parseInt(match[1], 10) - 1;
+		if (paramIndex >= 0 && paramIndex < params.length && Array.isArray(params[paramIndex])) {
+			anyParamIndices.add(paramIndex);
 		}
 	}
 
-	// Replace all $N with ?
-	const convertedSql = sql.replace(/\$\d+/g, "?");
+	// Build result by processing SQL left-to-right
+	let resultSql = "";
+	const resultParams: unknown[] = [];
+	let lastIndex = 0;
 
-	return { sql: convertedSql, params: expandedParams };
+	// Combined regex: match either "= ANY($N)" or standalone "$N"
+	const combinedRegex = /(=\s*ANY\(\$(\d+)\))|(\$(\d+))/gi;
+
+	for (const match of sql.matchAll(combinedRegex)) {
+		const matchStart = match.index ?? 0;
+		const matchEnd = matchStart + match[0].length;
+
+		// Add text before this match
+		resultSql += sql.slice(lastIndex, matchStart);
+
+		if (match[1]) {
+			// This is an ANY($N) match
+			const paramIndex = Number.parseInt(match[2], 10) - 1;
+			const paramValue = params[paramIndex];
+
+			if (Array.isArray(paramValue)) {
+				if (paramValue.length === 0) {
+					// Empty array - replace "= ANY($N)" with "IN (SELECT 1 WHERE 0)" (always false, syntactically valid)
+					resultSql += "IN (SELECT 1 WHERE 0)";
+					// No params to add
+				} else {
+					// Non-empty array - expand to "IN (?, ?, ...)"
+					const placeholders = paramValue.map(() => "?").join(", ");
+					resultSql += `IN (${placeholders})`;
+					resultParams.push(...paramValue);
+				}
+			} else {
+				// Not an array - keep original (will likely fail at runtime)
+				resultSql += match[0].replace(/\$\d+/, "?");
+				resultParams.push(paramValue);
+			}
+		} else if (match[3]) {
+			// This is a standalone $N match
+			const paramIndex = Number.parseInt(match[4], 10) - 1;
+
+			// Skip if this param was already handled by ANY() (shouldn't happen with proper SQL)
+			if (!anyParamIndices.has(paramIndex)) {
+				resultSql += "?";
+				if (paramIndex >= 0 && paramIndex < params.length) {
+					resultParams.push(params[paramIndex]);
+				}
+			} else {
+				// This $N is part of an ANY() that was already processed - skip
+				resultSql += "?";
+				if (paramIndex >= 0 && paramIndex < params.length) {
+					resultParams.push(params[paramIndex]);
+				}
+			}
+		}
+
+		lastIndex = matchEnd;
+	}
+
+	// Add remaining text after last match
+	resultSql += sql.slice(lastIndex);
+
+	return { sql: resultSql, params: resultParams };
 }
 
 /**
