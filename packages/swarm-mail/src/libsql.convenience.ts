@@ -22,6 +22,7 @@
  */
 
 import type { Client } from "@libsql/client";
+import { sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,7 +30,7 @@ import { basename, join } from "node:path";
 import { createSwarmMailAdapter } from "./adapter.js";
 import { createDrizzleClient } from "./db/drizzle.js";
 import type { SwarmDb } from "./db/client.js";
-import { createLibSQLAdapter } from "./libsql.js";
+import { createLibSQLAdapter, convertPlaceholders } from "./libsql.js";
 import { createLibSQLMemorySchema } from "./memory/libsql-schema.js";
 import { createLibSQLStreamsSchema } from "./streams/libsql-schema.js";
 import type { SwarmMailAdapter } from "./types/adapter.js";
@@ -138,12 +139,13 @@ export async function getSwarmMailLibSQL(
     return instances.get(key)!;
   }
 
-  // Create new instance
-  const dbPath = getDatabasePath(projectPath);
-  const db = await createLibSQLAdapter({ url: dbPath });
+  // CRITICAL: Use the shared adapter cache from store.ts to ensure
+  // all callers (sendSwarmMessage, getInbox, appendEvent) use the SAME adapter.
+  // Fixes bug where sendSwarmMessage created a different adapter, causing empty inbox.
+  const { getOrCreateAdapter } = await import("./streams/store.js");
+  const db = await getOrCreateAdapter(undefined, projectPath);
 
-  // Initialize schemas
-  await createLibSQLStreamsSchema(db);
+  // Initialize memory schema (streams schema already initialized by getOrCreateAdapter)
   // Cast to access getClient() - we know this is a LibSQLAdapter
   await createLibSQLMemorySchema((db as any).getClient());
 
@@ -201,6 +203,11 @@ export async function closeSwarmMailLibSQL(
   if (instance) {
     await instance.close();
     instances.delete(key);
+    
+    // CRITICAL: Also clear from the shared adapter cache in store.ts
+    // to prevent returning closed adapters on next getSwarmMailLibSQL call
+    const { clearAdapterCache } = await import("./streams/store.js");
+    clearAdapterCache();
   }
 }
 
@@ -216,6 +223,10 @@ export async function closeAllSwarmMailLibSQL(): Promise<void> {
 
   await Promise.all(closePromises);
   instances.clear();
+  
+  // CRITICAL: Also clear from the shared adapter cache in store.ts
+  const { clearAdapterCache } = await import("./streams/store.js");
+  clearAdapterCache();
 }
 
 /**
@@ -245,4 +256,43 @@ export function toSwarmDb(adapter: DatabaseAdapter): SwarmDb {
     throw new Error("DatabaseAdapter does not have getClient() method - must be a LibSQLAdapter");
   }
   return createDrizzleClient(adapterWithClient.getClient());
+}
+
+/**
+ * Convert DatabaseAdapter OR PGlite to SwarmDb (Drizzle client)
+ * 
+ * Supports both:
+ * - LibSQLAdapter (has getClient() method)
+ * - PGlite (direct instance)
+ * 
+ * @param db - DatabaseAdapter or PGlite instance
+ * @returns Drizzle client compatible with SwarmDb
+ * 
+ * @example
+ * ```typescript
+ * // Works with LibSQLAdapter
+ * const adapter = await createLibSQLAdapter();
+ * const drizzle = toDrizzleDb(adapter);
+ * 
+ * // Works with PGlite
+ * const pglite = await getDatabase(projectPath);
+ * const drizzle = toDrizzleDb(pglite);
+ * ```
+ */
+export function toDrizzleDb(db: any): SwarmDb {
+  // Check if it's a LibSQLAdapter (has getClient method)
+  if (db && typeof db.getClient === 'function') {
+    // LibSQL path - use existing createDrizzleClient
+    return createDrizzleClient(db.getClient());
+  }
+  
+  // Check if it's PGlite (has query and exec methods)
+  if (db && typeof db.query === 'function' && typeof db.exec === 'function') {
+    // PGlite path - use drizzle-orm/pglite adapter
+    const { drizzle } = require('drizzle-orm/pglite');
+    const { schema } = require('./db/schema/index.js');
+    return drizzle(db, { schema });
+  }
+  
+  throw new Error('Database must be either LibSQLAdapter (with getClient()) or PGlite (with query/exec)');
 }

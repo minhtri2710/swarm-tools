@@ -369,7 +369,9 @@ describe("Beads Adapter", () => {
       // Expected ID format: {slugified-name}-{hash}-{timestamp}{random}
       // Example: swarm-mail-lf2p4u-mjbneh7mqah
       
-      const testProjectPath = "/Users/joel/Code/joelhooks/opencode-swarm-plugin/packages/swarm-mail";
+      // Use import.meta.dir to get the directory of this test file
+      // Then navigate up to the package root (src/hive -> src -> package root)
+      const testProjectPath = import.meta.dir.split("/").slice(0, -2).join("/");
       const testAdapter = createHiveAdapter(db, testProjectPath);
       
       const bead = await testAdapter.createCell(testProjectPath, {
@@ -381,6 +383,46 @@ describe("Beads Adapter", () => {
       // ID should start with "swarm-mail-" (slugified from package.json name)
       // Hash can include negative sign, so we use [-a-z0-9]+
       expect(bead.id).toMatch(/^swarm-mail-[-a-z0-9]+-[a-z0-9]+$/);
+    });
+
+    test("RED: changeCellStatus to 'closed' sets closed_at (CHECK constraint)", async () => {
+      // BUG: changeCellStatus doesn't set closed_at when changing to 'closed'
+      // This violates CHECK constraint: ((status = 'closed') = (closed_at IS NOT NULL))
+      
+      const cell = await adapter.createCell(projectKey, {
+        title: "Status Close Test",
+        type: "task",
+        priority: 2,
+      });
+
+      // Change status to 'closed' (NOT using closeCell which works correctly)
+      const updated = await adapter.changeCellStatus(projectKey, cell.id, "closed", {
+        reason: "Done via status change"
+      });
+
+      // Should set closed_at when status changes to 'closed'
+      expect(updated.status).toBe("closed");
+      expect(updated.closed_at).toBeGreaterThan(0);
+      expect(updated.closed_at).not.toBeNull();
+      expect(updated.closed_reason).toBe("Done via status change");
+    });
+
+    test("RED: changeCellStatus from 'closed' to 'open' clears closed_at", async () => {
+      const cell = await adapter.createCell(projectKey, {
+        title: "Reopen via status Test",
+        type: "task",
+        priority: 2,
+      });
+
+      // Close first
+      await adapter.closeCell(projectKey, cell.id, "Done");
+
+      // Reopen via status change (NOT using reopenCell)
+      const reopened = await adapter.changeCellStatus(projectKey, cell.id, "open");
+
+      // Should clear closed_at when status changes away from 'closed'
+      expect(reopened.status).toBe("open");
+      expect(reopened.closed_at).toBeNull();
     });
 
     test("falls back to 'cell' when package.json not found", async () => {

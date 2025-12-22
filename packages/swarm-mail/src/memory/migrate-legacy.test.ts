@@ -13,13 +13,29 @@
  * memory_embeddings table), so this migration path doesn't apply.
  * 
  * This is a one-time migration tool for users upgrading from standalone
- * semantic-memory MCP server (which was PGLite) to swarm-mail (also PGLite).
+ * semantic-memory MCP server (which was PGlite) to swarm-mail (also PGlite).
  */
+
+// Skip all tests if PGLite is not available (it's a devDependency)
+let pgliteAvailable = false;
+let PGlite: typeof import("@electric-sql/pglite").PGlite | undefined;
+let vector: typeof import("@electric-sql/pglite/vector").vector | undefined;
+
+try {
+  const pgliteModule = await import("@electric-sql/pglite");
+  const vectorModule = await import("@electric-sql/pglite/vector");
+  PGlite = pgliteModule.PGlite;
+  vector = vectorModule.vector;
+  pgliteAvailable = true;
+} catch {
+  console.log("PGLite not available, skipping migrate-legacy tests");
+}
+
+const describeIf = pgliteAvailable ? describe : describe.skip;
+
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PGlite } from "@electric-sql/pglite";
-import { vector } from "@electric-sql/pglite/vector";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   migrateLegacyMemories,
@@ -27,10 +43,31 @@ import {
   legacyDatabaseExists,
   targetHasMemories,
 } from "./migrate-legacy.js";
-import { wrapPGlite } from "../pglite.js";
 import { runMigrations } from "../streams/migrations.js";
+import type { DatabaseAdapter } from "../types/database.js";
 
-describe("Legacy Memory Migration", () => {
+/**
+ * Wrap a PGlite instance as a DatabaseAdapter (inlined for test use only)
+ */
+function wrapPGlite(pglite: any): DatabaseAdapter {
+  return {
+    async query<T = unknown>(sql: string, params?: unknown[]) {
+      const result = await pglite.query(sql, params);
+      return { rows: result.rows as T[] };
+    },
+    async exec(sql: string) {
+      await pglite.exec(sql);
+    },
+    async transaction<T>(fn: (tx: DatabaseAdapter) => Promise<T>): Promise<T> {
+      return await fn(this);
+    },
+    async close() {
+      await pglite.close();
+    },
+  };
+}
+
+describeIf("Legacy Memory Migration", () => {
   let legacyDb: PGlite;
   let targetDb: PGlite;
   let legacyPath: string;

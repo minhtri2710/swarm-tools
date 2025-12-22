@@ -51,17 +51,17 @@ Slow tests don't get run. Fast tests catch bugs early.
 | Tier | Suffix | Speed | Dependencies | When to Run |
 |------|--------|-------|--------------|-------------|
 | Unit | `.test.ts` | <100ms | None | Every save |
-| Integration | `.integration.test.ts` | <5s | PGLite, filesystem | Pre-commit |
+| Integration | `.integration.test.ts` | <5s | libSQL, filesystem | Pre-commit |
 | E2E | `.e2e.test.ts` | <30s | External services | CI only |
 
 ### Rules for Fast Tests
 
-1. **Prefer in-memory databases** - Use `createInMemorySwarmMail()` over file-based PGLite
+1. **Prefer in-memory databases** - Use `createInMemorySwarmMail()` over file-based libSQL
 2. **Share instances when possible** - Use `beforeAll`/`afterAll` for expensive setup, not `beforeEach`/`afterEach`
 3. **Don't skip tests** - If a test needs external services, mock them or make them optional
 4. **Clean up after yourself** - But don't recreate the world for each test
 
-### PGLite Testing Pattern
+### libSQL Testing Pattern
 
 ```typescript
 // GOOD: Shared instance for related tests
@@ -86,7 +86,7 @@ beforeEach(async () => {
 });
 ```
 
-**WAL Safety Note:** Daemon mode is now the default (single long-lived process via in-process PGLiteSocketServer). This prevents WAL accumulation from multiple instances. Set `SWARM_MAIL_SOCKET=false` to opt out (single-process only). See `packages/swarm-mail/README.md` deployment section for details.
+**Note:** We use libSQL (SQLite-compatible) for all database operations. PGLite is only used for migration from legacy databases.
 
 ### Anti-Patterns to Avoid
 
@@ -293,6 +293,8 @@ Ensure `dependsOn: ["^build"]` in turbo.json so types are generated before depen
 
 PGLite may fail to initialize in parallel test runs. Tests fall back to in-memory mode automatically - this is expected behavior, not an error.
 
+**Note:** PGLite is deprecated. New code should use libSQL via `createInMemorySwarmMail()` or `getSwarmMailLibSQL()`.
+
 ## Naming Convention: The Hive Metaphor 🐝
 
 We use bee/hive metaphors consistently across the project. This isn't just branding - it's a mental model for multi-agent coordination.
@@ -327,11 +329,13 @@ We use bee/hive metaphors consistently across the project. This isn't just brand
 
 Event sourcing primitives for multi-agent coordination:
 
-- `EventStore` - append-only event log with PGLite
+- `EventStore` - append-only event log with libSQL
 - `Projections` - materialized views (agents, messages, reservations)
 - Effect-TS durable primitives (mailbox, cursor, lock, deferred)
 - `DatabaseAdapter` interface for dependency injection
 - **Hive** - git-synced work item tracking (formerly "beads")
+
+**Database:** Uses libSQL (SQLite-compatible) as the primary database. PGLite support exists only for migrating legacy databases.
 
 ### opencode-swarm-plugin
 
@@ -342,6 +346,60 @@ OpenCode plugin providing:
 - Swarm Mail (inter-agent messaging)
 - Learning system (pattern maturity, anti-pattern detection)
 - Skills system (knowledge injection)
+
+## Project Skills
+
+Skills live in `.opencode/skills/` and provide reusable knowledge for agents.
+
+### pr-triage
+
+Context-efficient PR comment handling. **Evaluate → Decide → Act.** Fix important issues, resolve the rest silently.
+
+**Location:** `.opencode/skills/pr-triage/`
+
+**Philosophy:** Replies are SECONDARY to addressing concerns. Don't reply to every comment - that's noise.
+
+| Comment Type | Action | Reply? |
+|--------------|--------|--------|
+| Security/correctness bug | FIX → reply with commit | ✅ Yes |
+| Valid improvement, in scope | FIX → reply with commit | ✅ Yes |
+| Valid but out of scope | Create cell → resolve | ❌ No |
+| Style/formatting nit | Resolve silently | ❌ No |
+| Metadata file (.jsonl, etc) | Resolve silently | ❌ No |
+| Already fixed | Reply with commit → resolve | ✅ Yes |
+
+**SOP:**
+
+```bash
+# 1. Get unreplied comments (start here)
+bun run .opencode/skills/pr-triage/scripts/pr-comments.ts unreplied owner/repo 42
+
+# 2. Evaluate: fetch body for important files only
+bun run .opencode/skills/pr-triage/scripts/pr-comments.ts expand owner/repo 123456
+
+# 3. Decide & Act:
+#    - Important issue? FIX IT in code, then:
+bun run .opencode/skills/pr-triage/scripts/pr-comments.ts reply owner/repo 42 123456 "✅ Fixed in abc123"
+
+#    - Not important? Resolve silently:
+bun run .opencode/skills/pr-triage/scripts/pr-comments.ts resolve owner/repo 42 123456
+```
+
+**Skip these (resolve silently):**
+- `.hive/issues.jsonl`, `.hive/memories.jsonl` - auto-generated
+- Changeset formatting suggestions
+- Import ordering, style nits
+- Suggestions you disagree with
+
+**Fix these (reply + resolve):**
+- Security vulnerabilities
+- Correctness bugs
+- Missing error handling
+- Type safety issues
+
+**SDK:** `scripts/pr-comments.ts` - Zod-validated, pagination-aware
+
+**References:** `references/gh-api-patterns.md` for raw jq/GraphQL patterns
 
 ## Publishing (Changesets + Bun)
 

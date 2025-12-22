@@ -13,6 +13,8 @@ tools:
   - swarm_complete
   - swarm_status
   - swarm_progress
+  - swarm_review
+  - swarm_review_feedback
   - hive_create_epic
   - hive_query
   - swarmmail_init
@@ -442,19 +444,120 @@ for (const subtask of subtasks) {
 }
 ```
 
-### Phase 6: Monitor & Intervene
+### Phase 6: MANDATORY Review Loop (NON-NEGOTIABLE)
+
+**⚠️ AFTER EVERY Worker Returns, You MUST Complete This Checklist:**
+
+This is the **quality gate** that prevents shipping broken code. DO NOT skip this.
 
 ```typescript
-// Check progress
-const status = await swarm_status({ epic_id, project_key });
-
-// Check for messages from workers
+// ============================================================
+// Step 1: Check Swarm Mail (Worker may have sent messages)
+// ============================================================
 const inbox = await swarmmail_inbox({ limit: 5 });
-
-// Read specific message if needed
 const message = await swarmmail_read_message({ message_id: N });
 
-// Intervene if needed (see Intervention Patterns)
+// ============================================================
+// Step 2: Review the Work (Generate review prompt with diff)
+// ============================================================
+const reviewPrompt = await swarm_review({
+  project_key: "/abs/path/to/project",
+  epic_id: "epic-id",
+  task_id: "subtask-id",
+  files_touched: ["src/auth/service.ts", "src/auth/service.test.ts"]
+});
+
+// This generates a review prompt that includes:
+// - Epic context (what we're trying to achieve)
+// - Subtask requirements
+// - Git diff of changes
+// - Dependency status (what came before, what comes next)
+
+// ============================================================
+// Step 3: Evaluate Against Criteria
+// ============================================================
+// Ask yourself:
+// - Does the work fulfill the subtask requirements?
+// - Does it serve the overall epic goal?
+// - Does it enable downstream tasks?
+// - Type safety, no obvious bugs?
+
+// ============================================================
+// Step 4: Send Feedback (Approve or Request Changes)
+// ============================================================
+await swarm_review_feedback({
+  project_key: "/abs/path/to/project",
+  task_id: "subtask-id",
+  worker_id: "WorkerName",
+  status: "approved",  // or "needs_changes"
+  summary: "LGTM - auth service looks solid",
+  issues: "[]"  // or "[{file, line, issue, suggestion}]"
+});
+
+// ============================================================
+// Step 5: ONLY THEN Continue
+// ============================================================
+// If approved:
+//   - Close the cell
+//   - Spawn next worker (if dependencies allow)
+//   - Update swarm status
+//
+// If needs_changes:
+//   - Worker gets feedback
+//   - Worker retries (max 3 attempts)
+//   - Review again when worker re-submits
+//
+// If 3 failures:
+//   - Mark task blocked
+//   - Escalate to human (architectural problem, not "try harder")
+```
+
+**❌ Anti-Pattern (Skipping Review):**
+
+```typescript
+// Worker completes
+swarm_complete({ ... });
+
+// Coordinator immediately spawns next worker
+// ⚠️ WRONG - No quality gate!
+Task({ subagent_type: "swarm/worker", prompt: nextWorkerPrompt });
+```
+
+**✅ Correct Pattern (Review Before Proceeding):**
+
+```typescript
+// Worker completes
+swarm_complete({ ... });
+
+// Coordinator REVIEWS first
+swarm_review({ ... });
+// ... evaluates changes ...
+swarm_review_feedback({ status: "approved" });
+
+// ONLY THEN spawn next worker
+Task({ subagent_type: "swarm/worker", prompt: nextWorkerPrompt });
+```
+
+**Review Workflow (3-Strike Rule):**
+
+1. Worker calls `swarm_complete` → Coordinator notified
+2. Coordinator runs `swarm_review` → Gets diff + epic context
+3. Coordinator evaluates against epic goals
+4. If good: `swarm_review_feedback(status="approved")` → Task closed
+5. If issues: `swarm_review_feedback(status="needs_changes", issues=[...])` → Worker fixes
+6. After 3 rejections → Task marked blocked (architectural problem, not "try harder")
+
+**Review Criteria:**
+- Does work fulfill subtask requirements?
+- Does it serve the overall epic goal?
+- Does it enable downstream tasks?
+- Type safety, no obvious bugs?
+
+**Monitoring & Intervention:**
+
+```typescript
+// Check overall swarm status
+const status = await swarm_status({ epic_id, project_key });
 ```
 
 ### Phase 7: Aggregate & Complete
@@ -777,6 +880,13 @@ One blocker affects multiple subtasks.
 | `swarmmail_release`      | Release file reservations           |
 | `swarmmail_ack`          | Acknowledge message                 |
 | `swarmmail_health`       | Check database health               |
+
+## Swarm Review Quick Reference
+
+| Tool                     | Purpose                                    |
+| ------------------------ | ------------------------------------------ |
+| `swarm_review`           | Generate review prompt with epic context + diff |
+| `swarm_review_feedback`  | Send approval/rejection to worker (3-strike rule) |
 
 ## Full Swarm Flow
 

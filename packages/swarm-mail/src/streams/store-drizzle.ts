@@ -55,7 +55,7 @@ export async function appendEventDrizzle(
       project_key,
       timestamp,
       data: JSON.stringify(rest),
-      sequence: null, // Auto-assigned by trigger or application logic
+      // sequence omitted - auto-assigned by database (SERIAL in PGlite, trigger in LibSQL)
     })
     .returning({ id: eventsTable.id, sequence: eventsTable.sequence });
 
@@ -541,4 +541,86 @@ async function handleSwarmRecoveredDrizzle(
         eq(swarmContextsTable.bead_id, event.bead_id),
       ),
     );
+}
+
+// ============================================================================
+// Convenience Wrappers (compatible with old PGlite-based signatures)
+// ============================================================================
+
+/**
+ * Utility: Get or create database adapter with schema initialization
+ * 
+ * CRITICAL: Uses the cached adapter from store.ts to ensure all callers
+ * (appendEvent, sendSwarmMessage, getInbox) use the SAME database instance.
+ * 
+ * Fixes bug where sendSwarmMessage created a different adapter than the test,
+ * causing empty inbox (messages written to adapter A, read from adapter B).
+ * 
+ * NOTE: Parameter order matches store-drizzle.ts convention (projectPath, dbOverride)
+ * but delegates to store.ts which uses (dbOverride, projectPath). We swap them here.
+ * 
+ * @internal Exported for use by swarm-mail.ts to ensure adapter consistency
+ */
+export async function getOrCreateAdapter(projectPath?: string, dbOverride?: any): Promise<any> {
+  const { getOrCreateAdapter: getCachedAdapter } = await import("./store.js");
+  
+  // CRITICAL: store.ts expects (dbOverride, projectPath) - swap parameter order!
+  return getCachedAdapter(dbOverride, projectPath);
+}
+
+/**
+ * Convenience wrapper for appendEventDrizzle that matches the old signature.
+ * Gets database from adapter and converts to SwarmDb.
+ */
+export async function appendEvent(
+  event: AgentEvent,
+  projectPath?: string,
+  dbOverride?: any,
+): Promise<AgentEvent & { id: number; sequence: number }> {
+  const { toDrizzleDb } = await import("../libsql.convenience.js");
+  
+  const db = await getOrCreateAdapter(projectPath, dbOverride);
+  const swarmDb = toDrizzleDb(db);
+  
+  return appendEventDrizzle(swarmDb, event);
+}
+
+/**
+ * Convenience wrapper for readEventsDrizzle
+ */
+export async function readEvents(
+  options: {
+    projectKey?: string;
+    types?: AgentEvent["type"][];
+    since?: number;
+    until?: number;
+    afterSequence?: number;
+    limit?: number;
+    offset?: number;
+  } = {},
+  projectPath?: string,
+  dbOverride?: any,
+): Promise<Array<AgentEvent & { id: number; sequence: number }>> {
+  const { toDrizzleDb } = await import("../libsql.convenience.js");
+  
+  const db = await getOrCreateAdapter(projectPath, dbOverride);
+  const swarmDb = toDrizzleDb(db);
+  
+  return readEventsDrizzle(swarmDb, options);
+}
+
+/**
+ * Convenience wrapper for getLatestSequenceDrizzle
+ */
+export async function getLatestSequence(
+  projectKey?: string,
+  projectPath?: string,
+  dbOverride?: any,
+): Promise<number> {
+  const { toDrizzleDb } = await import("../libsql.convenience.js");
+  
+  const db = await getOrCreateAdapter(projectPath, dbOverride);
+  const swarmDb = toDrizzleDb(db);
+  
+  return getLatestSequenceDrizzle(swarmDb, projectKey);
 }

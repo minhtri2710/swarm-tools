@@ -37,11 +37,13 @@ import {
 } from "../src/hive";
 import {
   legacyDatabaseExists,
-  getMigrationStatus,
-  migrateLegacyMemories,
-  targetHasMemories,
-  getSwarmMailLibSQL,
+  migratePGliteToLibSQL,
+  pgliteExists,
+  getLibSQLProjectTempDirName,
+  getLibSQLDatabasePath,
+  hashLibSQLProjectPath,
 } from "swarm-mail";
+import { tmpdir } from "os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -709,6 +711,68 @@ function buildAgentsSemanticMemorySection(newline: string): string {
   ].join(newline);
 }
 
+function buildAgentsSwarmCoordinatorSection(newline: string): string {
+  return [
+    "## Swarm Coordinator Checklist (MANDATORY)",
+    "",
+    "When coordinating a swarm, you MUST monitor workers and review their output.",
+    "",
+    "### Monitor Loop",
+    "",
+    "```",
+    "┌─────────────────────────────────────────────────────────────┐",
+    "│                 COORDINATOR MONITOR LOOP                    │",
+    "├─────────────────────────────────────────────────────────────┤",
+    "│                                                             │",
+    "│  1. CHECK INBOX                                             │",
+    "│     swarmmail_inbox()                                       │",
+    "│     swarmmail_read_message(message_id=N)                    │",
+    "│                                                             │",
+    "│  2. CHECK STATUS                                            │",
+    "│     swarm_status(epic_id, project_key)                      │",
+    "│                                                             │",
+    "│  3. REVIEW COMPLETED WORK                                   │",
+    "│     swarm_review(project_key, epic_id, task_id, files)      │",
+    "│     → Generates review prompt with epic context + diff      │",
+    "│                                                             │",
+    "│  4. SEND FEEDBACK                                           │",
+    "│     swarm_review_feedback(                                  │",
+    "│       project_key, task_id, worker_id,                      │",
+    "│       status=\"approved|needs_changes\",                      │",
+    "│       issues=\"[{file, line, issue, suggestion}]\"            │",
+    "│     )                                                       │",
+    "│                                                             │",
+    "│  5. INTERVENE IF NEEDED                                     │",
+    "│     - Blocked >5min → unblock or reassign                   │",
+    "│     - File conflicts → mediate                              │",
+    "│     - Scope creep → approve or reject                       │",
+    "│     - 3 review failures → escalate to human                 │",
+    "│                                                             │",
+    "└─────────────────────────────────────────────────────────────┘",
+    "```",
+    "",
+    "### Review Tools",
+    "",
+    "| Tool | Purpose |",
+    "|------|---------|",
+    "| `swarm_review` | Generate review prompt with epic context, dependencies, and git diff |",
+    "| `swarm_review_feedback` | Send approval/rejection to worker (tracks 3-strike rule) |",
+    "",
+    "### Review Criteria",
+    "",
+    "- Does work fulfill subtask requirements?",
+    "- Does it serve the overall epic goal?",
+    "- Does it enable downstream tasks?",
+    "- Type safety, no obvious bugs?",
+    "",
+    "### 3-Strike Rule",
+    "",
+    "After 3 review rejections, task is marked **blocked**. This signals an architectural problem, not \"try harder.\"",
+    "",
+    "**NEVER skip the review step.** Workers complete faster when they get feedback.",
+  ].join(newline);
+}
+
 function updateAgentsToolPreferencesBlock(
   content: string,
   newline: string,
@@ -740,6 +804,9 @@ function updateAgentsToolPreferencesBlock(
   const hasSemanticTools =
     /semantic-memory_find/i.test(block) &&
     /semantic-memory_store/i.test(block);
+  const hasSwarmReviewTools =
+    /swarm_review\b/i.test(block) &&
+    /swarm_review_feedback/i.test(block);
 
   const linesToAdd: string[] = [];
   if (!hasSkillsTools) {
@@ -755,6 +822,11 @@ function updateAgentsToolPreferencesBlock(
   if (!hasSemanticTools) {
     linesToAdd.push(
       "- **semantic-memory_find, semantic-memory_store, semantic-memory_validate** - Persistent learning across sessions",
+    );
+  }
+  if (!hasSwarmReviewTools) {
+    linesToAdd.push(
+      "- **swarm_review, swarm_review_feedback** - Coordinator reviews worker output (3-strike rule)",
     );
   }
 
@@ -820,6 +892,10 @@ function updateAgentsMdContent({
   const hasSemanticMemorySection =
     /^#{1,6}\s+Semantic Memory\b/im.test(updated) ||
     /semantic-memory_store\(/.test(updated);
+  const hasSwarmCoordinatorSection =
+    /^#{1,6}\s+Swarm Coordinator\b/im.test(updated) ||
+    /swarm_review\(/.test(updated) ||
+    /COORDINATOR MONITOR LOOP/i.test(updated);
 
   const sectionsToAppend: string[] = [];
   if (!hasSkillsSection) {
@@ -835,6 +911,10 @@ function updateAgentsMdContent({
   if (!hasSemanticMemorySection) {
     sectionsToAppend.push(buildAgentsSemanticMemorySection(newline));
     changes.push("Added Semantic Memory section");
+  }
+  if (!hasSwarmCoordinatorSection) {
+    sectionsToAppend.push(buildAgentsSwarmCoordinatorSection(newline));
+    changes.push("Added Swarm Coordinator Checklist section");
   }
 
   if (sectionsToAppend.length > 0) {
@@ -1053,18 +1133,45 @@ const result2 = await Task(subagent_type="swarm/worker", prompt="<from above>")
 
 **IMPORTANT:** Pass \`project_path\` to \`swarm_spawn_subtask\` so workers can call \`swarmmail_init\`.
 
-### Phase 7: Monitor
-\`\`\`
-swarm_status(epic_id, project_key)
-swarmmail_inbox()
-\`\`\`
+### Phase 7: MANDATORY Review Loop (NON-NEGOTIABLE)
 
-Intervene if: blocked >5min, file conflicts, scope creep.
+**⚠️ AFTER EVERY Task() RETURNS, YOU MUST:**
+
+1. **CHECK INBOX** - Worker may have sent messages
+   \`swarmmail_inbox()\`
+   \`swarmmail_read_message(message_id=N)\`
+
+2. **REVIEW WORK** - Generate review with diff
+   \`swarm_review(project_key, epic_id, task_id, files_touched)\`
+
+3. **EVALUATE** - Does it meet epic goals?
+   - Fulfills subtask requirements?
+   - Serves overall epic goal?
+   - Enables downstream tasks?
+   - Type safety, no obvious bugs?
+
+4. **SEND FEEDBACK** - Approve or request changes
+   \`swarm_review_feedback(project_key, task_id, worker_id, status, issues)\`
+   
+   If approved: Close cell, spawn next worker
+   If needs_changes: Worker retries (max 3 attempts)
+   If 3 failures: Mark blocked, escalate to human
+
+5. **ONLY THEN** - Spawn next worker or complete
+
+**DO NOT skip this. DO NOT batch reviews. Review EACH worker IMMEDIATELY after return.**
+
+**Intervene if:**
+- Worker blocked >5min → unblock or reassign
+- File conflicts → mediate between workers
+- Scope creep → approve or reject expansion
+- Review fails 3x → mark task blocked, escalate to human
 
 ### Phase 8: Complete
 \`\`\`
-swarm_complete(...)
-hive_sync()
+# After all workers complete and reviews pass:
+hive_sync()                                    # Sync all cells to git
+# Coordinator does NOT call swarm_complete - workers do that
 \`\`\`
 
 ## Strategy Reference
@@ -1377,9 +1484,44 @@ async function setup() {
 
   p.intro("opencode-swarm-plugin v" + VERSION);
 
+  // Migrate legacy database if present (do this first, before config check)
+  const cwd = process.cwd();
+  const tempDirName = getLibSQLProjectTempDirName(cwd);
+  const tempDir = join(tmpdir(), tempDirName);
+  const pglitePath = join(tempDir, "streams");
+  const libsqlPath = join(tempDir, "streams.db");
+  
+  if (pgliteExists(pglitePath)) {
+    const migrateSpinner = p.spinner();
+    migrateSpinner.start("Migrating...");
+    
+    try {
+      const result = await migratePGliteToLibSQL({
+        pglitePath,
+        libsqlPath,
+        dryRun: false,
+        onProgress: () => {},
+      });
+      
+      const total = result.memories.migrated + result.beads.migrated;
+      if (total > 0) {
+        migrateSpinner.stop(`Migrated ${result.memories.migrated} memories, ${result.beads.migrated} cells`);
+      } else {
+        migrateSpinner.stop("Migrated");
+      }
+      
+      if (result.errors.length > 0) {
+        p.log.warn(`${result.errors.length} errors during migration`);
+      }
+    } catch (error) {
+      migrateSpinner.stop("Migration failed");
+      p.log.error(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   let isReinstall = false;
 
-  // Check if already configured FIRST
+  // Check if already configured
   p.log.step("Checking existing configuration...");
   const configDir = join(homedir(), ".config", "opencode");
   const pluginDir = join(configDir, "plugin");
@@ -1624,7 +1766,6 @@ async function setup() {
 
   // Check for .beads → .hive migration
   p.log.step("Checking for legacy .beads directory...");
-  const cwd = process.cwd();
   const migrationCheck = checkBeadsMigrationNeeded(cwd);
   if (migrationCheck.needed) {
     p.log.warn("Found legacy .beads directory");
@@ -1681,120 +1822,6 @@ async function setup() {
     }
   } else {
     p.log.message(dim("  No legacy .beads directory found"));
-  }
-
-  // Check for legacy semantic-memory migration
-  p.log.step("Checking for legacy semantic-memory database...");
-  if (legacyDatabaseExists()) {
-    p.log.warn("Found legacy semantic-memory database");
-    
-    // Check if target database already has memories (already migrated)
-    let swarmMail = null;
-    try {
-      swarmMail = await getSwarmMailLibSQL(cwd);
-      const targetDb = await swarmMail.getDatabase(cwd);
-      const alreadyMigrated = await targetHasMemories(targetDb);
-      
-      if (alreadyMigrated) {
-        p.log.message(dim("  Already migrated to swarm-mail"));
-        await swarmMail.close();
-      } else {
-        await swarmMail.close();
-        swarmMail = null;
-        
-        // Target is empty - show migration status and prompt
-        const migrationStatus = await getMigrationStatus();
-        if (migrationStatus) {
-          const { total, withEmbeddings } = migrationStatus;
-          p.log.message(dim(`  Memories: ${total} total (${withEmbeddings} with embeddings)`));
-          p.log.message(dim(`  Will migrate to swarm-mail unified database`));
-          
-          const shouldMigrate = await p.confirm({
-            message: "Migrate to swarm-mail database? (recommended)",
-            initialValue: true,
-          });
-
-          if (p.isCancel(shouldMigrate)) {
-            p.cancel("Setup cancelled");
-            process.exit(0);
-          }
-
-          if (shouldMigrate) {
-            const migrateSpinner = p.spinner();
-            migrateSpinner.start("Connecting to target database...");
-            
-            try {
-              // Get swarm-mail database for this project
-              swarmMail = await getSwarmMailLibSQL(cwd);
-              const targetDb = await swarmMail.getDatabase(cwd);
-              migrateSpinner.message("Migrating memories...");
-              
-              // Run migration with progress updates
-              const result = await migrateLegacyMemories({
-                targetDb,
-                onProgress: (msg) => {
-                  // Update spinner message for key milestones
-                  if (msg.includes("complete") || msg.includes("Progress:")) {
-                    migrateSpinner.message(msg.replace("[migrate] ", ""));
-                  }
-                },
-              });
-              
-              migrateSpinner.stop("Semantic memory migration complete");
-              
-              if (result.migrated > 0) {
-                p.log.success(`Migrated ${result.migrated} memories to swarm-mail`);
-              }
-              if (result.skipped > 0) {
-                p.log.message(dim(`  Skipped ${result.skipped} (already exist)`));
-              }
-              if (result.failed > 0) {
-                p.log.warn(`Failed to migrate ${result.failed} memories`);
-                for (const error of result.errors.slice(0, 3)) {
-                  p.log.message(dim(`  ${error}`));
-                }
-                if (result.errors.length > 3) {
-                  p.log.message(dim(`  ... and ${result.errors.length - 3} more errors`));
-                }
-              }
-              
-              // Close the connection to allow process to exit
-              await swarmMail.close();
-              swarmMail = null;
-            } catch (error) {
-              migrateSpinner.stop("Migration failed");
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              // Hide internal PGLite errors, only show user-actionable messages
-              if (!errorMsg.includes("NOTICE") && !errorMsg.includes("PGlite")) {
-                p.log.error(errorMsg);
-              } else {
-                p.log.warn("Migration encountered an error - please try again");
-              }
-              if (swarmMail) {
-                await swarmMail.close();
-                swarmMail = null;
-              }
-            }
-          } else {
-            p.log.warn("Skipping migration - legacy semantic-memory will continue to work but is deprecated");
-          }
-        }
-      }
-    } catch (error) {
-      // Failed to connect to target database - log and skip
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      // Hide internal PGLite errors
-      if (!errorMsg.includes("NOTICE") && !errorMsg.includes("PGlite")) {
-        p.log.message(dim(`  Could not check migration status: ${errorMsg}`));
-      } else {
-        p.log.message(dim("  Could not check migration status - skipping"));
-      }
-      if (swarmMail) {
-        await swarmMail.close();
-      }
-    }
-  } else {
-    p.log.message(dim("  No legacy semantic-memory database found"));
   }
 
   // Check for legacy semantic-memory MCP server in OpenCode config
@@ -2445,6 +2472,7 @@ ${cyan("Commands:")}
   swarm init      Initialize beads in current project
   swarm config    Show paths to generated config files
   swarm agents    Update AGENTS.md with skill awareness
+  swarm migrate   Migrate PGlite database to libSQL
   swarm update    Update to latest version
   swarm version   Show version and banner
   swarm tool      Execute a tool (for plugin wrapper)
@@ -2684,6 +2712,232 @@ async function agents() {
 }
 
 // ============================================================================
+// Migrate Command - PGlite → libSQL migration
+// ============================================================================
+
+async function migrate() {
+  p.intro("swarm migrate v" + VERSION);
+
+  const projectPath = process.cwd();
+  
+  // Calculate the temp directory path (same logic as libsql.convenience.ts)
+  const tempDirName = getLibSQLProjectTempDirName(projectPath);
+  const tempDir = join(tmpdir(), tempDirName);
+  const pglitePath = join(tempDir, "streams");
+  const libsqlPath = join(tempDir, "streams.db");
+
+  // Check if PGlite exists
+  if (!pgliteExists(pglitePath)) {
+    p.log.success("No PGlite database found - nothing to migrate!");
+    p.outro("Done");
+    return;
+  }
+
+  // Dry run to show counts
+  const s = p.spinner();
+  s.start("Scanning PGlite database...");
+
+  try {
+    const dryResult = await migratePGliteToLibSQL({
+      pglitePath,
+      libsqlPath,
+      dryRun: true,
+      onProgress: () => {}, // silent during dry run
+    });
+
+    s.stop("Scan complete");
+
+    // Show summary
+    const totalItems = 
+      dryResult.memories.migrated + 
+      dryResult.beads.migrated + 
+      dryResult.messages.migrated + 
+      dryResult.agents.migrated + 
+      dryResult.events.migrated;
+
+    if (totalItems === 0) {
+      p.log.warn("PGlite database exists but contains no data");
+      p.outro("Nothing to migrate");
+      return;
+    }
+
+    p.log.step("Found data to migrate:");
+    if (dryResult.memories.migrated > 0) {
+      p.log.message(`  📝 ${dryResult.memories.migrated} memories`);
+    }
+    if (dryResult.beads.migrated > 0) {
+      p.log.message(`  🐝 ${dryResult.beads.migrated} cells`);
+    }
+    if (dryResult.messages.migrated > 0) {
+      p.log.message(`  ✉️  ${dryResult.messages.migrated} messages`);
+    }
+    if (dryResult.agents.migrated > 0) {
+      p.log.message(`  🤖 ${dryResult.agents.migrated} agents`);
+    }
+    if (dryResult.events.migrated > 0) {
+      p.log.message(`  📋 ${dryResult.events.migrated} events`);
+    }
+
+    // Confirm
+    const confirm = await p.confirm({
+      message: "Migrate this data to libSQL?",
+      initialValue: true,
+    });
+
+    if (p.isCancel(confirm) || !confirm) {
+      p.outro("Migration cancelled");
+      return;
+    }
+
+    // Run actual migration
+    const migrateSpinner = p.spinner();
+    migrateSpinner.start("Migrating data...");
+
+    const result = await migratePGliteToLibSQL({
+      pglitePath,
+      libsqlPath,
+      dryRun: false,
+      onProgress: (msg) => {
+        // Update spinner for key milestones
+        if (msg.includes("Migrating") || msg.includes("complete")) {
+          migrateSpinner.message(msg.replace("[migrate] ", ""));
+        }
+      },
+    });
+
+    migrateSpinner.stop("Migration complete!");
+
+    // Show results
+    const showStat = (label: string, stat: { migrated: number; skipped: number; failed: number }) => {
+      if (stat.migrated > 0 || stat.skipped > 0 || stat.failed > 0) {
+        const parts = [];
+        if (stat.migrated > 0) parts.push(green(`${stat.migrated} migrated`));
+        if (stat.skipped > 0) parts.push(dim(`${stat.skipped} skipped`));
+        if (stat.failed > 0) parts.push(`\x1b[31m${stat.failed} failed\x1b[0m`);
+        p.log.message(`  ${label}: ${parts.join(", ")}`);
+      }
+    };
+
+    showStat("Memories", result.memories);
+    showStat("Cells", result.beads);
+    showStat("Messages", result.messages);
+    showStat("Agents", result.agents);
+    showStat("Events", result.events);
+
+    if (result.errors.length > 0) {
+      p.log.warn(`${result.errors.length} errors occurred`);
+    }
+
+    p.outro("Migration complete! 🐝");
+
+  } catch (error) {
+    s.stop("Migration failed");
+    p.log.error(error instanceof Error ? error.message : String(error));
+    p.outro("Migration failed");
+    process.exit(1);
+  }
+}
+
+// ============================================================================
+// Database Info Command
+// ============================================================================
+
+/**
+ * Show database location and status
+ * 
+ * Helps debug which database is being used and its schema state.
+ */
+async function db() {
+  const projectPath = process.cwd();
+  const projectName = basename(projectPath);
+  const hash = hashLibSQLProjectPath(projectPath);
+  const dbPath = getLibSQLDatabasePath(projectPath);
+  const dbDir = dirname(dbPath.replace("file:", ""));
+  const dbFile = dbPath.replace("file:", "");
+  
+  console.log(yellow(BANNER));
+  console.log(dim(`  ${TAGLINE}\n`));
+  
+  console.log(cyan("  Database Info\n"));
+  
+  console.log(`  ${dim("Project:")}     ${projectPath}`);
+  console.log(`  ${dim("Project Name:")} ${projectName}`);
+  console.log(`  ${dim("Hash:")}         ${hash}`);
+  console.log(`  ${dim("DB Directory:")} ${dbDir}`);
+  console.log(`  ${dim("DB File:")}      ${dbFile}`);
+  console.log();
+  
+  // Check if database exists
+  if (existsSync(dbFile)) {
+    const stats = statSync(dbFile);
+    const sizeKB = Math.round(stats.size / 1024);
+    console.log(`  ${green("✓")} Database exists (${sizeKB} KB)`);
+    
+    // Check schema
+    try {
+      const { execSync } = await import("child_process");
+      const schema = execSync(`sqlite3 "${dbFile}" "SELECT sql FROM sqlite_master WHERE type='table' AND name='beads'"`, { encoding: "utf-8" }).trim();
+      
+      if (schema) {
+        const hasProjectKey = schema.includes("project_key");
+        if (hasProjectKey) {
+          console.log(`  ${green("✓")} Schema is correct (has project_key)`);
+        } else {
+          console.log(`  \x1b[31m✗\x1b[0m Schema is OLD (missing project_key)`);
+          console.log();
+          console.log(dim("    To fix: delete the database and restart OpenCode"));
+          console.log(dim(`    rm -r "${dbDir}"`));
+        }
+      } else {
+        console.log(`  ${dim("○")} No beads table yet (will be created on first use)`);
+      }
+      
+      // Check schema_version
+      try {
+        const version = execSync(`sqlite3 "${dbFile}" "SELECT MAX(version) FROM schema_version"`, { encoding: "utf-8" }).trim();
+        if (version && version !== "") {
+          console.log(`  ${dim("○")} Schema version: ${version}`);
+        }
+      } catch {
+        console.log(`  ${dim("○")} No schema_version table`);
+      }
+      
+      // Count records
+      try {
+        const beadCount = execSync(`sqlite3 "${dbFile}" "SELECT COUNT(*) FROM beads"`, { encoding: "utf-8" }).trim();
+        console.log(`  ${dim("○")} Cells: ${beadCount}`);
+      } catch {
+        // Table doesn't exist yet
+      }
+      
+      try {
+        const memoryCount = execSync(`sqlite3 "${dbFile}" "SELECT COUNT(*) FROM memories"`, { encoding: "utf-8" }).trim();
+        console.log(`  ${dim("○")} Memories: ${memoryCount}`);
+      } catch {
+        // Table doesn't exist yet
+      }
+      
+    } catch (error) {
+      console.log(`  ${dim("○")} Could not inspect schema (sqlite3 not available)`);
+    }
+  } else {
+    console.log(`  ${dim("○")} Database does not exist yet`);
+    console.log(dim("    Will be created on first use"));
+  }
+  
+  // Check for legacy PGLite
+  console.log();
+  const pglitePath = join(dbDir, "streams");
+  if (existsSync(pglitePath)) {
+    console.log(`  \x1b[33m!\x1b[0m Legacy PGLite directory exists`);
+    console.log(dim(`    ${pglitePath}`));
+    console.log(dim("    Run 'swarm migrate' to migrate data"));
+  }
+  
+  console.log();
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -2720,6 +2974,12 @@ switch (command) {
   }
   case "agents":
     await agents();
+    break;
+  case "migrate":
+    await migrate();
+    break;
+  case "db":
+    await db();
     break;
   case "version":
   case "--version":

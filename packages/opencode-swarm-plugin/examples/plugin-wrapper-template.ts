@@ -11,12 +11,17 @@
  * - OPENCODE_SESSION_ID: Passed to CLI for session state persistence
  * - OPENCODE_MESSAGE_ID: Passed to CLI for context
  * - OPENCODE_AGENT: Passed to CLI for context
+ * - SWARM_PROJECT_DIR: Project directory (critical for database path)
  */
 import type { Plugin, PluginInput, Hooks } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
 import { spawn } from "child_process";
 
 const SWARM_CLI = "swarm";
+
+// Module-level project directory - set during plugin initialization
+// This is CRITICAL: without it, the CLI uses process.cwd() which may be wrong
+let projectDirectory: string = process.cwd();
 
 // =============================================================================
 // CLI Execution Helper
@@ -27,6 +32,8 @@ const SWARM_CLI = "swarm";
  *
  * Spawns `swarm tool <name> --json '<args>'` and returns the result.
  * Passes session context via environment variables.
+ * 
+ * IMPORTANT: Runs in projectDirectory (set by OpenCode) not process.cwd()
  */
 async function execTool(
   name: string,
@@ -40,12 +47,14 @@ async function execTool(
       : ["tool", name];
 
     const proc = spawn(SWARM_CLI, cliArgs, {
+      cwd: projectDirectory, // Run in project directory, not plugin directory
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
         OPENCODE_SESSION_ID: ctx.sessionID,
         OPENCODE_MESSAGE_ID: ctx.messageID,
         OPENCODE_AGENT: ctx.agent,
+        SWARM_PROJECT_DIR: projectDirectory, // Also pass as env var
       },
     });
 
@@ -1058,9 +1067,11 @@ Extract from session context:
 
 1. \`swarm_status(epic_id="<epic>", project_key="<path>")\` - Get current state
 2. \`swarmmail_inbox(limit=5)\` - Check for agent messages
-3. **Spawn ready subtasks** - Don't wait, fire them off
-4. **Unblock blocked work** - Resolve dependencies, reassign if needed
-5. **Collect completed work** - Close done subtasks, verify quality
+3. \`swarm_review(project_key, epic_id, task_id, files_touched)\` - Review any completed work
+4. \`swarm_review_feedback(project_key, task_id, worker_id, status, issues)\` - Approve or request changes
+5. **Spawn ready subtasks** - Don't wait, fire them off
+6. **Unblock blocked work** - Resolve dependencies, reassign if needed
+7. **Collect completed work** - Close done subtasks, verify quality
 
 ### Keep the Swarm Cooking
 
@@ -1122,8 +1133,12 @@ type ExtendedHooks = Hooks & {
 };
 
 export const SwarmPlugin: Plugin = async (
-  _input: PluginInput,
+  input: PluginInput,
 ): Promise<ExtendedHooks> => {
+  // CRITICAL: Set project directory from OpenCode input
+  // Without this, CLI uses wrong database path
+  projectDirectory = input.directory;
+  
   return {
     tool: {
       // Beads

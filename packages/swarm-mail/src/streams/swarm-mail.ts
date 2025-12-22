@@ -17,14 +17,16 @@
  * - DurableDeferred for request/response messaging
  */
 import { createEvent } from "./events";
-import { isDatabaseHealthy, getDatabaseStats } from "./index";
+// Note: isDatabaseHealthy and getDatabaseStats have been removed (PGlite infrastructure cleanup)
+// Use Drizzle-based implementations that auto-create adapters when dbOverride is not provided
 import {
+  type Conflict,
   checkConflicts,
   getActiveReservations,
   getInbox,
   getMessage,
-} from "./projections";
-import { appendEvent, registerAgent, reserveFiles, sendMessage } from "./store";
+} from "./projections-drizzle";
+import { appendEvent } from "./store-drizzle";
 
 // ============================================================================
 // Constants
@@ -92,6 +94,7 @@ export interface InitSwarmAgentOptions {
   program?: string;
   model?: string;
   taskDescription?: string;
+  dbOverride?: any;
 }
 
 export interface SendSwarmMessageOptions {
@@ -103,6 +106,7 @@ export interface SendSwarmMessageOptions {
   threadId?: string;
   importance?: "low" | "normal" | "high" | "urgent";
   ackRequired?: boolean;
+  dbOverride?: any;
 }
 
 export interface SendSwarmMessageResult {
@@ -119,6 +123,7 @@ export interface GetSwarmInboxOptions {
   urgentOnly?: boolean;
   unreadOnly?: boolean;
   includeBodies?: boolean;
+  dbOverride?: any;
 }
 
 export interface SwarmInboxMessage {
@@ -141,6 +146,7 @@ export interface ReadSwarmMessageOptions {
   messageId: number;
   agentName?: string;
   markAsRead?: boolean;
+  dbOverride?: any;
 }
 
 export interface ReserveSwarmFilesOptions {
@@ -151,6 +157,7 @@ export interface ReserveSwarmFilesOptions {
   exclusive?: boolean;
   ttlSeconds?: number;
   force?: boolean;
+  dbOverride?: any;
 }
 
 export interface GrantedSwarmReservation {
@@ -176,6 +183,7 @@ export interface ReleaseSwarmFilesOptions {
   agentName: string;
   paths?: string[];
   reservationIds?: number[];
+  dbOverride?: any;
 }
 
 export interface ReleaseSwarmFilesResult {
@@ -187,6 +195,7 @@ export interface AcknowledgeSwarmOptions {
   projectPath: string;
   messageId: number;
   agentName: string;
+  dbOverride?: any;
 }
 
 export interface AcknowledgeSwarmResult {
@@ -223,15 +232,19 @@ export async function initSwarmAgent(
     program = "opencode",
     model = "unknown",
     taskDescription,
+    dbOverride,
   } = options;
 
   // Register the agent (creates event + updates view)
-  await registerAgent(
-    projectPath, // Use projectPath as projectKey
-    agentName,
-    { program, model, taskDescription },
-    projectPath,
-  );
+  // Inline the registerAgent logic using appendEvent + createEvent
+  const event = createEvent("agent_registered", {
+    project_key: projectPath,
+    agent_name: agentName,
+    program,
+    model,
+    task_description: taskDescription,
+  });
+  await appendEvent(event, projectPath, dbOverride);
 
   return {
     projectKey: projectPath,
@@ -260,29 +273,44 @@ export async function sendSwarmMessage(
     threadId,
     importance = "normal",
     ackRequired = false,
+    dbOverride,
   } = options;
 
-  await sendMessage(
-    projectPath,
-    fromAgent,
-    toAgents,
+  // Inline the sendMessage logic using appendEvent + createEvent
+  const messageEvent = createEvent("message_sent", {
+    project_key: projectPath,
+    from_agent: fromAgent,
+    to_agents: toAgents,
     subject,
     body,
-    { threadId, importance, ackRequired },
-    projectPath,
-  );
+    thread_id: threadId,
+    importance,
+    ack_required: ackRequired,
+  });
+  await appendEvent(messageEvent, projectPath, dbOverride);
 
   // Get the message ID from the messages table (not the event ID)
-  const { getDatabase } = await import("./index");
-  const db = await getDatabase(projectPath);
-  const result = await db.query<{ id: number }>(
-    `SELECT id FROM messages 
-     WHERE project_key = $1 AND from_agent = $2 AND subject = $3
-     ORDER BY created_at DESC LIMIT 1`,
-    [projectPath, fromAgent, subject],
-  );
+  // CRITICAL: Use same adapter as appendEvent above to avoid empty inbox bug
+  const { toDrizzleDb } = await import("../libsql.convenience");
+  const { messagesTable } = await import("../db/schema/streams");
+  const { eq, desc, and } = await import("drizzle-orm");
+  
+  // Use getOrCreateAdapter from store-drizzle to get the same cached adapter
+  const { getOrCreateAdapter } = await import("./store-drizzle");
+  const adapter = await getOrCreateAdapter(projectPath, dbOverride);
+  const swarmDb = toDrizzleDb(adapter);
+  const result = await swarmDb
+    .select({ id: messagesTable.id })
+    .from(messagesTable)
+    .where(and(
+      eq(messagesTable.project_key, projectPath),
+      eq(messagesTable.from_agent, fromAgent),
+      eq(messagesTable.subject, subject)
+    ))
+    .orderBy(desc(messagesTable.created_at))
+    .limit(1);
 
-  const messageId = result.rows[0]?.id ?? 0;
+  const messageId = result[0]?.id ?? 0;
 
   return {
     success: true,
@@ -307,6 +335,7 @@ export async function getSwarmInbox(
     urgentOnly = false,
     unreadOnly = false,
     includeBodies = false,
+    dbOverride,
   } = options;
 
   // Enforce max limit
@@ -322,6 +351,7 @@ export async function getSwarmInbox(
       includeBodies,
     },
     projectPath,
+    dbOverride,
   );
 
   return {
@@ -344,9 +374,9 @@ export async function getSwarmInbox(
 export async function readSwarmMessage(
   options: ReadSwarmMessageOptions,
 ): Promise<SwarmInboxMessage | null> {
-  const { projectPath, messageId, agentName, markAsRead = false } = options;
+  const { projectPath, messageId, agentName, markAsRead = false, dbOverride } = options;
 
-  const message = await getMessage(projectPath, messageId, projectPath);
+  const message = await getMessage(projectPath, messageId, projectPath, dbOverride);
 
   if (!message) {
     return null;
@@ -361,6 +391,7 @@ export async function readSwarmMessage(
         agent_name: agentName,
       }),
       projectPath,
+      dbOverride,
     );
   }
 
@@ -397,6 +428,7 @@ export async function reserveSwarmFiles(
     reason,
     exclusive = true,
     ttlSeconds = DEFAULT_TTL_SECONDS,
+    dbOverride,
   } = options;
 
   // Check for conflicts first
@@ -405,22 +437,28 @@ export async function reserveSwarmFiles(
     agentName,
     paths,
     projectPath,
+    dbOverride,
   );
 
   // Always create reservations - conflicts are warnings, not blockers
-  await reserveFiles(
-    projectPath,
-    agentName,
+  // Inline the reserveFiles logic using appendEvent + createEvent
+  const reserveEvent = createEvent("file_reserved", {
+    project_key: projectPath,
+    agent_name: agentName,
     paths,
-    { reason, exclusive, ttlSeconds },
-    projectPath,
-  );
+    reason,
+    exclusive,
+    ttl_seconds: ttlSeconds,
+    expires_at: Date.now() + ttlSeconds * 1000,
+  });
+  await appendEvent(reserveEvent, projectPath, dbOverride);
 
   // Query the actual reservation IDs from the database
   const reservations = await getActiveReservations(
     projectPath,
     projectPath,
     agentName,
+    dbOverride,
   );
 
   // Filter to just the paths we reserved (most recent ones)
@@ -435,7 +473,7 @@ export async function reserveSwarmFiles(
 
   return {
     granted,
-    conflicts: conflicts.map((c) => ({
+    conflicts: conflicts.map((c: Conflict) => ({
       path: c.path,
       holder: c.holder,
       pattern: c.pattern,
@@ -451,13 +489,14 @@ export async function reserveSwarmFiles(
 export async function releaseSwarmFiles(
   options: ReleaseSwarmFilesOptions,
 ): Promise<ReleaseSwarmFilesResult> {
-  const { projectPath, agentName, paths, reservationIds } = options;
+  const { projectPath, agentName, paths, reservationIds, dbOverride } = options;
 
   // Get current reservations to count what we're releasing
   const currentReservations = await getActiveReservations(
     projectPath,
     projectPath,
     agentName,
+    dbOverride,
   );
 
   let releaseCount = 0;
@@ -486,6 +525,7 @@ export async function releaseSwarmFiles(
       reservation_ids: reservationIds,
     }),
     projectPath,
+    dbOverride,
   );
 
   return {
@@ -504,7 +544,7 @@ export async function releaseSwarmFiles(
 export async function acknowledgeSwarmMessage(
   options: AcknowledgeSwarmOptions,
 ): Promise<AcknowledgeSwarmResult> {
-  const { projectPath, messageId, agentName } = options;
+  const { projectPath, messageId, agentName, dbOverride } = options;
 
   const timestamp = Date.now();
 
@@ -515,6 +555,7 @@ export async function acknowledgeSwarmMessage(
       agent_name: agentName,
     }),
     projectPath,
+    dbOverride,
   );
 
   return {
@@ -529,24 +570,23 @@ export async function acknowledgeSwarmMessage(
 
 /**
  * Check if the swarm mail store is healthy
+ * 
+ * Migrated from PGlite to libSQL adapter pattern.
  */
 export async function checkSwarmHealth(
   projectPath?: string,
 ): Promise<SwarmHealthResult> {
-  const healthy = await isDatabaseHealthy(projectPath);
-
-  if (!healthy) {
-    return {
-      healthy: false,
-      database: "disconnected",
-    };
-  }
-
-  const stats = await getDatabaseStats(projectPath);
-
+  const { getSwarmMailLibSQL } = await import("../libsql.convenience.js");
+  
+  const swarmMail = await getSwarmMailLibSQL(projectPath);
+  const db = await swarmMail.getDatabase();
+  
+  // Test basic connectivity with a simple query
+  const result = await db.query("SELECT 1 as test");
+  const isHealthy = result.rows.length === 1;
+  
   return {
-    healthy: true,
-    database: "connected",
-    stats,
+    healthy: isHealthy,
+    database: isHealthy ? "connected" : "disconnected",
   };
 }
