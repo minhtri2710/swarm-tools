@@ -47,6 +47,7 @@ import { repoCrawlTools } from "./repo-crawl";
 import { skillsTools, setSkillsProjectDirectory } from "./skills";
 import { mandateTools } from "./mandates";
 import { memoryTools } from "./memory-tools";
+import { observabilityTools } from "./observability-tools";
 import {
   guardrailOutput,
   DEFAULT_GUARDRAIL_CONFIG,
@@ -154,7 +155,7 @@ export const SwarmPlugin: Plugin = async (
  * - mandate:file, mandate:vote, mandate:query, etc.
  * - semantic-memory:store, semantic-memory:find, semantic-memory:get, etc.
  */
-    tool: {
+     tool: {
       ...hiveTools,
       ...swarmMailTools,
       ...structuredTools,
@@ -165,6 +166,7 @@ export const SwarmPlugin: Plugin = async (
       ...skillsTools,
       ...mandateTools,
       ...memoryTools,
+      ...observabilityTools,
     },
 
     /**

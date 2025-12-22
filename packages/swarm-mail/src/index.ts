@@ -18,6 +18,12 @@
 export const SWARM_MAIL_VERSION = "0.1.0";
 
 // ============================================================================
+// Debug Logging
+// ============================================================================
+
+export { log as debugLog } from "./debug";
+
+// ============================================================================
 // Core (database-agnostic)
 // ============================================================================
 
@@ -122,6 +128,38 @@ export {
 	reserveSwarmFiles,
 	sendSwarmMessage,
 } from "./streams/swarm-mail";
+
+// ============================================================================
+// Analytics Module Exports (query builder and formatters)
+// ============================================================================
+
+export {
+	agentActivity,
+	checkpointFrequency,
+	failedDecompositions,
+	formatCSV,
+	formatJSON,
+	formatJSONL,
+	formatTable,
+	humanFeedback,
+	lockContention,
+	messageLatency,
+	QueryBuilder,
+	recoverySuccess,
+	scopeViolations,
+	strategySuccessRates,
+	taskDuration,
+} from "./analytics";
+export type {
+	AgentActivityFilters,
+	AnalyticsQuery,
+	FailedDecompositionsFilters,
+	LockContentionFilters,
+	MessageLatencyFilters,
+	OutputFormat,
+	QueryResult,
+	StrategySuccessRatesFilters,
+} from "./analytics";
 
 // ============================================================================
 // Hive Module Exports (work item tracking)
