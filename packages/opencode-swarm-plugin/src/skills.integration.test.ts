@@ -16,7 +16,7 @@
  * - skills_execute
  */
 
-import { describe, expect, it, afterAll, beforeEach } from "vitest";
+import { describe, expect, it, afterAll, beforeEach, vi } from "vitest";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -1053,4 +1053,140 @@ describe("skills_execute tool", () => {
     expect(result).toContain("timed out");
     expect(result).toContain("60 seconds");
   }, 65000); // Allow 65s for test itself
+});
+
+// =============================================================================
+// Deprecation Warnings Tests
+// =============================================================================
+
+describe("deprecation warnings", () => {
+  beforeEach(() => {
+    setupTestDir();
+  });
+
+  afterAll(() => {
+    cleanupTestDir();
+  });
+
+  it("skills_list emits deprecation warning", async () => {
+    const warnSpy = vi.spyOn(console, "warn");
+    
+    await skills_list.execute({});
+    
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[DEPRECATED] skills_list")
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("OpenCode now provides native skills support")
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("skills_use emits deprecation warning", async () => {
+    await skills_create.execute({
+      name: "test-skill",
+      description: "Use when testing",
+      body: "Instructions",
+    });
+
+    invalidateSkillsCache();
+    
+    const warnSpy = vi.spyOn(console, "warn");
+    
+    await skills_use.execute({ name: "test-skill" });
+    
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[DEPRECATED] skills_use")
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("OpenCode now provides native skills support")
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("skills_read emits deprecation warning", async () => {
+    await skills_create.execute({
+      name: "test-skill",
+      description: "Use when testing",
+      body: "Instructions",
+    });
+
+    const skillDir = join(SKILLS_DIR, "test-skill");
+    writeFileSync(join(skillDir, "example.md"), "# Example");
+
+    invalidateSkillsCache();
+    
+    const warnSpy = vi.spyOn(console, "warn");
+    
+    await skills_read.execute({
+      skill: "test-skill",
+      file: "example.md",
+    });
+    
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[DEPRECATED] skills_read")
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("OpenCode now provides native skills support")
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("skills_execute emits deprecation warning", async () => {
+    await skills_create.execute({
+      name: "test-skill",
+      description: "Use when testing",
+      body: "Instructions",
+    });
+
+    await skills_add_script.execute({
+      skill: "test-skill",
+      script_name: "test.sh",
+      content: '#!/bin/bash\necho "test"',
+    });
+
+    const scriptPath = join(SKILLS_DIR, "test-skill", "scripts", "test.sh");
+    chmodSync(scriptPath, 0o755);
+
+    invalidateSkillsCache();
+    
+    const warnSpy = vi.spyOn(console, "warn");
+    
+    await skills_execute.execute({
+      skill: "test-skill",
+      script: "test.sh",
+    });
+    
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[DEPRECATED] skills_execute")
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("OpenCode now provides native skills support")
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("deprecated tools still function correctly (soft deprecation)", async () => {
+    // Create a skill
+    await skills_create.execute({
+      name: "functional-test",
+      description: "Use when testing functionality",
+      body: "# Test\n\nStill works!",
+    });
+
+    invalidateSkillsCache();
+
+    // Suppress console.warn for this test
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // skills_list should still list skills
+    const listResult = await skills_list.execute({});
+    expect(listResult).toContain("functional-test");
+
+    // skills_use should still return content
+    const useResult = await skills_use.execute({ name: "functional-test" });
+    expect(useResult).toContain("Still works!");
+
+    warnSpy.mockRestore();
+  });
 });

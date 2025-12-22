@@ -399,7 +399,7 @@ export function invalidateSkillsCache(): void {
  * which skills are relevant to the current task.
  */
 export const skills_list = tool({
-  description: `List all available skills in the project.
+  description: `[DEPRECATED] List all available skills in the project.
 
 Skills are specialized instructions that help with specific domains or tasks.
 Use this tool to discover what skills are available, then use skills_use to
@@ -413,6 +413,7 @@ Returns skill names, descriptions, and whether they have executable scripts.`,
       .describe("Optional tag to filter skills by"),
   },
   async execute(args) {
+    console.warn('[DEPRECATED] skills_list is deprecated. OpenCode now provides native skills support. This tool will be removed in a future version.');
     const skills = await discoverSkills();
     let refs = Array.from(skills.values());
 
@@ -448,7 +449,7 @@ Returns skill names, descriptions, and whether they have executable scripts.`,
  * The skill's instructions become available for the model to follow.
  */
 export const skills_use = tool({
-  description: `Activate a skill by loading its full instructions.
+  description: `[DEPRECATED] Activate a skill by loading its full instructions.
 
 After calling this tool, follow the skill's instructions for the current task.
 Skills provide domain-specific guidance and best practices.
@@ -462,6 +463,7 @@ If the skill has scripts, you can run them with skills_execute.`,
       .describe("Also list available scripts (default: true)"),
   },
   async execute(args) {
+    console.warn('[DEPRECATED] skills_use is deprecated. OpenCode now provides native skills support. This tool will be removed in a future version.');
     const skill = await getSkill(args.name);
 
     if (!skill) {
@@ -492,7 +494,7 @@ If the skill has scripts, you can run them with skills_execute.`,
  * This tool runs them with appropriate context.
  */
 export const skills_execute = tool({
-  description: `Execute a script from a skill's scripts/ directory.
+  description: `[DEPRECATED] Execute a script from a skill's scripts/ directory.
 
 Some skills include helper scripts for common operations.
 Use skills_use first to see available scripts, then execute them here.
@@ -507,6 +509,7 @@ Scripts run in the skill's directory with the project directory as an argument.`
       .describe("Additional arguments to pass to the script"),
   },
   async execute(args, ctx) {
+    console.warn('[DEPRECATED] skills_execute is deprecated. OpenCode now provides native skills support. This tool will be removed in a future version.');
     const skill = await getSkill(args.skill);
 
     if (!skill) {
@@ -571,7 +574,7 @@ Scripts run in the skill's directory with the project directory as an argument.`
  * Skills can include additional resources like examples, templates, or reference docs.
  */
 export const skills_read = tool({
-  description: `Read a resource file from a skill's directory.
+  description: `[DEPRECATED] Read a resource file from a skill's directory.
 
 Skills may include additional files like:
 - examples.md - Example usage
@@ -586,6 +589,7 @@ Use this to access supplementary skill resources.`,
       .describe("Relative path to the file within the skill directory"),
   },
   async execute(args) {
+    console.warn('[DEPRECATED] skills_read is deprecated. OpenCode now provides native skills support. This tool will be removed in a future version.');
     const skill = await getSkill(args.skill);
 
     if (!skill) {

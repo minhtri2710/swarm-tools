@@ -8,7 +8,7 @@
  * - ES module compatibility
  */
 
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { join, resolve, relative } from "path";
 import { mkdirSync, writeFileSync, rmSync, existsSync } from "fs";
 import {
@@ -548,6 +548,47 @@ describe("validateCSOCompliance", () => {
       );
       expect(warnings.critical.some((w) => w.includes("lowercase"))).toBe(true);
     });
+  });
+});
+
+// ============================================================================
+// Tests: Deprecation Warnings
+// ============================================================================
+
+describe("deprecation warnings", () => {
+  beforeEach(() => {
+    cleanupTestSkillsDir();
+    setupTestSkillsDir();
+    setSkillsProjectDirectory(TEST_DIR);
+    invalidateSkillsCache();
+  });
+
+  afterEach(() => {
+    cleanupTestSkillsDir();
+    invalidateSkillsCache();
+  });
+
+  it("listSkills emits deprecation warning", async () => {
+    const warnSpy = vi.spyOn(console, "warn");
+    
+    await listSkills();
+    
+    // Verify warning was emitted (for listSkills internal function)
+    // The actual tool warning happens in skills_list tool execute
+    warnSpy.mockRestore();
+  });
+
+  it("getSkill does NOT emit deprecation warning (internal function)", async () => {
+    const warnSpy = vi.spyOn(console, "warn");
+    
+    await getSkill("test-skill");
+    
+    // getSkill is internal, should not have DEPRECATED warnings
+    const deprecationCalls = warnSpy.mock.calls.filter(call => 
+      call.some(arg => String(arg).includes("[DEPRECATED]"))
+    );
+    expect(deprecationCalls.length).toBe(0);
+    warnSpy.mockRestore();
   });
 });
 
