@@ -218,6 +218,16 @@
 {"id":"fbdec046-f92e-47dc-a80a-26e1a6c5fe8f","information":"{\"id\":\"pattern-1766080072119-xmi0cf\",\"content\":\"Test pattern for semantic search\",\"kind\":\"pattern\",\"is_negative\":false,\"success_count\":0,\"failure_count\":0,\"created_at\":\"2025-12-18T17:47:52.119Z\",\"updated_at\":\"2025-12-18T17:47:52.119Z\",\"tags\":[],\"example_beads\":[]}","created_at":"2025-12-18T17:47:52.415Z","metadata":"{\"id\":\"pattern-1766080072119-xmi0cf\",\"kind\":\"pattern\",\"is_negative\":false}"}
 {"id":"fdf514c6-3fba-4361-b5f4-fd7b5d023985","information":"{\"id\":\"test-1765771077694-7w6dasddwz8\",\"criterion\":\"type_safe\",\"type\":\"helpful\",\"timestamp\":\"2025-12-15T03:57:57.694Z\",\"raw_value\":1}","created_at":"2025-12-15T03:57:58.059Z","metadata":"{\"type\":\"helpful\",\"bead_id\":\"\",\"criterion\":\"type_safe\",\"timestamp\":\"2025-12-15T03:57:57.694Z\"}"}
 {"id":"ffb8e28a-303d-4941-afe7-bf21f69656fb","information":"{\"id\":\"test-1765666114922-71ihlfel1gc\",\"criterion\":\"type_safe\",\"type\":\"helpful\",\"timestamp\":\"2025-12-13T22:48:34.922Z\",\"raw_value\":1}","created_at":"2025-12-13T22:48:35.124Z","metadata":"{\"type\":\"helpful\",\"bead_id\":\"\",\"criterion\":\"type_safe\",\"timestamp\":\"2025-12-13T22:48:34.922Z\"}"}
+{"id":"mem_mjbteazb_g1swqjm","information":"Test memory for tools integration","created_at":"2025-12-18T19:09:38.711Z","tags":"test"}
+{"id":"mem_mjbteb35_o8xwaxn","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-18T19:09:38.849Z"}
+{"id":"mem_mjbteo3a_mnd325l","information":"Test memory for tools integration","created_at":"2025-12-18T19:09:55.702Z","tags":"test"}
+{"id":"mem_mjbteo63_cntql3t","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-18T19:09:55.803Z"}
+{"id":"mem_mjbtfnxa_aqgvk47","information":"Test memory for tools integration","created_at":"2025-12-18T19:10:42.142Z","tags":"test"}
+{"id":"mem_mjbtfo0a_rl5fovi","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-18T19:10:42.250Z"}
+{"id":"mem_mjc4u7uc_ida1vo0","information":"Test memory for tools integration","created_at":"2025-12-19T00:29:56.916Z","tags":"test"}
+{"id":"mem_mjc4u88t_692zb2b","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-19T00:29:57.437Z"}
+{"id":"mem_mjc9u9iu_0p65p35","information":"Test memory for tools integration","created_at":"2025-12-19T02:49:57.174Z","tags":"test"}
+{"id":"mem_mjc9u9nv_qp4wu75","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-19T02:49:57.355Z"}
 {"id":"mem_mjg2bbr7_8dzcx47","information":"Test memory for tools integration","created_at":"2025-12-21T18:30:20.995Z","tags":"test"}
 {"id":"mem_mjg2bflw_cvt2e62","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-21T18:30:25.988Z"}
 {"id":"mem_mjg6xq4w_sqam2z5","information":"Test memory for tools integration","created_at":"2025-12-21T20:39:44.528Z","tags":"test"}
@@ -237,3 +247,18 @@
 {"id":"mem_mjk7zeui_q42ye4o","information":"Test memory for adapter wiring verification","created_at":"2025-12-24T16:20:07.530Z","tags":"test,memory"}
 {"id":"mem_mjk7zeyo_awoip6a","information":"OAuth refresh tokens need 5min buffer before expiry","created_at":"2025-12-24T16:20:07.680Z","metadata":"{\"raw\":\"auth,tokens,oauth\"}","tags":"auth,integration-test"}
 {"id":"mem_mjk7zf2v_g2oe1pb","information":"Smoke test verified full tool adapter wiring works end-to-end","created_at":"2025-12-24T16:20:07.831Z","tags":"test,verification"}
+{"id":"mem_mjk8090f_5tv3s34","information":"Test memory for tools integration","created_at":"2025-12-24T16:20:46.624Z","tags":"test"}
+{"id":"mem_mjk8096p_elpumun","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-24T16:20:46.849Z"}
+{"id":"mem_mjk80bna_ylpyr22","information":"Test memory for adapter wiring verification","created_at":"2025-12-24T16:20:50.038Z","tags":"test,memory"}
+{"id":"mem_mjk80bpa_97wmmwn","information":"OAuth refresh tokens need 5min buffer before expiry","created_at":"2025-12-24T16:20:50.110Z","metadata":"{\"raw\":\"auth,tokens,oauth\"}","tags":"auth,integration-test"}
+{"id":"mem_mjk80br5_ha4y3zt","information":"Smoke test verified full tool adapter wiring works end-to-end","created_at":"2025-12-24T16:20:50.177Z","tags":"test,verification"}
+{"id":"mem_mjk81a5f_ep969wf","information":"Test memory for tools integration","created_at":"2025-12-24T16:21:34.755Z","tags":"test"}
+{"id":"mem_mjk81ac6_5y5krag","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-24T16:21:34.998Z"}
+{"id":"mem_mjk81cmm_pxhe6tv","information":"Test memory for adapter wiring verification","created_at":"2025-12-24T16:21:37.966Z","tags":"test,memory"}
+{"id":"mem_mjk81cqo_v3w2110","information":"OAuth refresh tokens need 5min buffer before expiry","created_at":"2025-12-24T16:21:38.112Z","metadata":"{\"raw\":\"auth,tokens,oauth\"}","tags":"auth,integration-test"}
+{"id":"mem_mjk81cua_hhxy8qi","information":"Smoke test verified full tool adapter wiring works end-to-end","created_at":"2025-12-24T16:21:38.242Z","tags":"test,verification"}
+{"id":"mem_mjk91g18_y5s6wkg","information":"Test memory for tools integration","created_at":"2025-12-24T16:49:41.996Z","tags":"test"}
+{"id":"mem_mjk91ge8_39uareg","information":"Findable test memory with unique keyword xyztest123","created_at":"2025-12-24T16:49:42.464Z"}
+{"id":"mem_mjk91k4k_a255x4y","information":"Test memory for adapter wiring verification","created_at":"2025-12-24T16:49:47.300Z","tags":"test,memory"}
+{"id":"mem_mjk91kac_7tn2d8n","information":"OAuth refresh tokens need 5min buffer before expiry","created_at":"2025-12-24T16:49:47.508Z","metadata":"{\"raw\":\"auth,tokens,oauth\"}","tags":"auth,integration-test"}
+{"id":"mem_mjk91knd_unxg7d7","information":"Smoke test verified full tool adapter wiring works end-to-end","created_at":"2025-12-24T16:49:47.977Z","tags":"test,verification"}
