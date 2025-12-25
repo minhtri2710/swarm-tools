@@ -29,8 +29,17 @@
  * ```
  */
 
-import { getHiveAdapter, getHiveWorkingDirectory } from "./hive";
 import { checkSwarmHealth } from "swarm-mail";
+import {
+  CompactionPhase,
+  createMetricsCollector,
+  getMetricsSummary,
+  recordPatternExtracted,
+  recordPatternSkipped,
+  recordPhaseComplete,
+  recordPhaseStart,
+} from "./compaction-observability";
+import { getHiveAdapter, getHiveWorkingDirectory } from "./hive";
 import { createChildLogger } from "./logger";
 
 let _logger: any | undefined;
@@ -931,6 +940,12 @@ export function createCompactionHook(client?: OpencodeClient) {
     output: { context: string[] },
   ): Promise<void> => {
     const startTime = Date.now();
+    
+    // Create metrics collector
+    const metrics = createMetricsCollector({
+      session_id: input.sessionID,
+      has_sdk_client: !!client,
+    });
 
     getLog().info(
       {
@@ -940,12 +955,19 @@ export function createCompactionHook(client?: OpencodeClient) {
       },
       "compaction started",
     );
+    
+    recordPhaseStart(metrics, CompactionPhase.START);
 
     try {
+      recordPhaseComplete(metrics, CompactionPhase.START);
+      
       // Scan session messages for precise swarm state (if client available)
+      recordPhaseStart(metrics, CompactionPhase.GATHER_SWARM_MAIL);
       const scannedState = await scanSessionMessages(client, input.sessionID);
+      recordPhaseComplete(metrics, CompactionPhase.GATHER_SWARM_MAIL);
       
       // Also run heuristic detection from hive/swarm-mail
+      recordPhaseStart(metrics, CompactionPhase.DETECT);
       const detection = await detectSwarm();
 
       // Boost confidence if we found swarm evidence in session messages
@@ -955,13 +977,21 @@ export function createCompactionHook(client?: OpencodeClient) {
         if (effectiveConfidence === "none" || effectiveConfidence === "low") {
           effectiveConfidence = "medium";
           detection.reasons.push("swarm tool calls found in session");
+          recordPatternExtracted(metrics, "swarm_tool_calls", "Found swarm tool calls in session");
         }
         if (scannedState.subtasks.size > 0) {
           effectiveConfidence = "high";
           detection.reasons.push(`${scannedState.subtasks.size} subtasks spawned`);
+          recordPatternExtracted(metrics, "subtasks", `${scannedState.subtasks.size} subtasks spawned`);
         }
       }
+      
+      recordPhaseComplete(metrics, CompactionPhase.DETECT, {
+        confidence: effectiveConfidence,
+        detected: detection.detected || scannedState.epicId !== undefined,
+      });
 
+      recordPhaseStart(metrics, CompactionPhase.INJECT);
       if (
         effectiveConfidence === "high" ||
         effectiveConfidence === "medium"
@@ -988,6 +1018,11 @@ export function createCompactionHook(client?: OpencodeClient) {
 
         const contextContent = header + dynamicState + SWARM_COMPACTION_CONTEXT;
         output.context.push(contextContent);
+        
+        recordPhaseComplete(metrics, CompactionPhase.INJECT, {
+          context_length: contextContent.length,
+          context_type: "full",
+        });
 
         getLog().info(
           {
@@ -1007,6 +1042,11 @@ export function createCompactionHook(client?: OpencodeClient) {
         const header = `[Possible swarm: ${detection.reasons.join(", ")}]\n\n`;
         const contextContent = header + SWARM_DETECTION_FALLBACK;
         output.context.push(contextContent);
+        
+        recordPhaseComplete(metrics, CompactionPhase.INJECT, {
+          context_length: contextContent.length,
+          context_type: "fallback",
+        });
 
         getLog().info(
           {
@@ -1018,6 +1058,10 @@ export function createCompactionHook(client?: OpencodeClient) {
           "injected swarm context",
         );
       } else {
+        recordPhaseComplete(metrics, CompactionPhase.INJECT, {
+          context_type: "none",
+        });
+        
         getLog().debug(
           {
             confidence: effectiveConfidence,
@@ -1028,7 +1072,10 @@ export function createCompactionHook(client?: OpencodeClient) {
       }
       // confidence === "none" - no injection, probably not a swarm
 
+      recordPhaseStart(metrics, CompactionPhase.COMPLETE);
       const duration = Date.now() - startTime;
+      const summary = getMetricsSummary(metrics);
+      
       getLog().info(
         {
           duration_ms: duration,
@@ -1036,11 +1083,30 @@ export function createCompactionHook(client?: OpencodeClient) {
           detected: detection.detected || scannedState.epicId !== undefined,
           confidence: effectiveConfidence,
           context_injected: output.context.length > 0,
+          // Add metrics summary
+          metrics: {
+            phases: Object.keys(summary.phases).map(phase => ({
+              name: phase,
+              duration_ms: summary.phases[phase].duration_ms,
+              success: summary.phases[phase].success,
+            })),
+            patterns_extracted: summary.patterns_extracted,
+            patterns_skipped: summary.patterns_skipped,
+            extraction_success_rate: summary.extraction_success_rate,
+          },
         },
         "compaction complete",
       );
+      
+      recordPhaseComplete(metrics, CompactionPhase.COMPLETE);
     } catch (error) {
       const duration = Date.now() - startTime;
+      
+      recordPhaseComplete(metrics, CompactionPhase.COMPLETE, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      
       getLog().error(
         {
           duration_ms: duration,

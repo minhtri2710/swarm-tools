@@ -2548,6 +2548,11 @@ ${cyan("Log Viewing:")}
   swarm log --limit <n>                Limit output to n lines (default: 50)
   swarm log --watch, -w                Watch mode - continuously monitor for new logs
   swarm log --interval <ms>            Poll interval in ms (default: 1000, min: 100)
+  swarm log sessions                   List all captured coordinator sessions
+  swarm log sessions <session_id>      View events for a specific session
+  swarm log sessions --latest          View most recent session
+  swarm log sessions --type <type>     Filter by event type (DECISION, VIOLATION, OUTCOME, COMPACTION)
+  swarm log sessions --json            Raw JSON output for jq
 
 ${cyan("Eval Commands:")}
   swarm eval status [eval-name]        Show current phase, thresholds, recent scores
@@ -2912,6 +2917,298 @@ async function migrate() {
 }
 
 // ============================================================================
+// Session Log Helpers
+// ============================================================================
+
+import type { CoordinatorEvent } from "../src/eval-capture.js";
+
+/**
+ * Parse a session file and return events
+ */
+function parseSessionFile(filePath: string): CoordinatorEvent[] {
+  if (!existsSync(filePath)) {
+    throw new Error(`Session file not found: ${filePath}`);
+  }
+
+  const content = readFileSync(filePath, "utf-8");
+  const lines = content.split("\n").filter((line) => line.trim());
+  const events: CoordinatorEvent[] = [];
+
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      events.push(parsed);
+    } catch {
+      // Skip invalid JSON lines
+    }
+  }
+
+  return events;
+}
+
+/**
+ * List all session files in a directory
+ */
+function listSessionFiles(
+  dir: string,
+): Array<{
+  session_id: string;
+  file_path: string;
+  event_count: number;
+  start_time: string;
+  end_time?: string;
+}> {
+  if (!existsSync(dir)) return [];
+
+  const files = readdirSync(dir).filter((f: string) => f.endsWith(".jsonl"));
+  const sessions: Array<{
+    session_id: string;
+    file_path: string;
+    event_count: number;
+    start_time: string;
+    end_time?: string;
+  }> = [];
+
+  for (const file of files) {
+    const filePath = join(dir, file);
+    try {
+      const events = parseSessionFile(filePath);
+      if (events.length === 0) continue;
+
+      const timestamps = events.map((e) => new Date(e.timestamp).getTime());
+      const startTime = new Date(Math.min(...timestamps)).toISOString();
+      const endTime =
+        timestamps.length > 1
+          ? new Date(Math.max(...timestamps)).toISOString()
+          : undefined;
+
+      sessions.push({
+        session_id: events[0].session_id,
+        file_path: filePath,
+        event_count: events.length,
+        start_time: startTime,
+        end_time: endTime,
+      });
+    } catch {
+      // Skip invalid files
+    }
+  }
+
+  // Sort by start time (newest first)
+  return sessions.sort((a, b) =>
+    new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+  );
+}
+
+/**
+ * Get the latest session file
+ */
+function getLatestSession(
+  dir: string,
+): {
+  session_id: string;
+  file_path: string;
+  event_count: number;
+  start_time: string;
+  end_time?: string;
+} | null {
+  const sessions = listSessionFiles(dir);
+  return sessions.length > 0 ? sessions[0] : null;
+}
+
+/**
+ * Filter events by type
+ */
+function filterEventsByType(
+  events: CoordinatorEvent[],
+  eventType: string,
+): CoordinatorEvent[] {
+  if (eventType === "all") return events;
+  return events.filter((e) => e.event_type === eventType.toUpperCase());
+}
+
+/**
+ * Filter events by time
+ */
+function filterEventsSince(
+  events: CoordinatorEvent[],
+  sinceMs: number,
+): CoordinatorEvent[] {
+  const cutoffTime = Date.now() - sinceMs;
+  return events.filter((e) =>
+    new Date(e.timestamp).getTime() >= cutoffTime
+  );
+}
+
+/**
+ * Format an event for display
+ */
+function formatEvent(event: CoordinatorEvent, useColor = true): string {
+  const timestamp = new Date(event.timestamp).toLocaleTimeString();
+  const typeColor = useColor
+    ? event.event_type === "VIOLATION"
+      ? red
+      : event.event_type === "OUTCOME"
+      ? green
+      : cyan
+    : (s: string) => s;
+  
+  const type = typeColor(event.event_type.padEnd(12));
+  
+  // Get specific type
+  let specificType = "";
+  if (event.event_type === "DECISION") {
+    specificType = event.decision_type;
+  } else if (event.event_type === "VIOLATION") {
+    specificType = event.violation_type;
+  } else if (event.event_type === "OUTCOME") {
+    specificType = event.outcome_type;
+  } else if (event.event_type === "COMPACTION") {
+    specificType = event.compaction_type;
+  }
+  
+  return `${timestamp} ${type} ${specificType}`;
+}
+
+// ============================================================================
+// Session Log Command
+// ============================================================================
+
+async function logSessions() {
+  const args = process.argv.slice(4); // Skip 'log' and 'sessions'
+  const sessionsDir = join(homedir(), ".config", "swarm-tools", "sessions");
+  
+  // Parse arguments
+  let sessionId: string | null = null;
+  let latest = false;
+  let jsonOutput = false;
+  let eventTypeFilter: string | null = null;
+  let sinceMs: number | null = null;
+  let limit = 100;
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === "--latest") {
+      latest = true;
+    } else if (arg === "--json") {
+      jsonOutput = true;
+    } else if (arg === "--type" && i + 1 < args.length) {
+      eventTypeFilter = args[++i];
+    } else if (arg === "--since" && i + 1 < args.length) {
+      const duration = parseDuration(args[++i]);
+      if (duration === null) {
+        p.log.error(`Invalid duration format: ${args[i]}`);
+        p.log.message(dim("  Use format: 30s, 5m, 2h, 1d"));
+        process.exit(1);
+      }
+      sinceMs = duration;
+    } else if (arg === "--limit" && i + 1 < args.length) {
+      limit = parseInt(args[++i], 10);
+      if (isNaN(limit) || limit <= 0) {
+        p.log.error(`Invalid limit: ${args[i]}`);
+        process.exit(1);
+      }
+    } else if (!arg.startsWith("--") && !arg.startsWith("-")) {
+      // Positional arg = session ID
+      sessionId = arg;
+    }
+  }
+  
+  // If no args, list sessions
+  if (!sessionId && !latest) {
+    const sessions = listSessionFiles(sessionsDir);
+    
+    if (jsonOutput) {
+      console.log(JSON.stringify({ sessions }, null, 2));
+      return;
+    }
+    
+    if (sessions.length === 0) {
+      p.log.warn("No session files found");
+      p.log.message(dim(`  Expected: ${sessionsDir}/*.jsonl`));
+      return;
+    }
+    
+    console.log(yellow(BANNER));
+    console.log(dim(`  Coordinator Sessions (${sessions.length} total)\n`));
+    
+    // Show sessions table
+    for (const session of sessions) {
+      const startTime = new Date(session.start_time).toLocaleString();
+      const duration = session.end_time
+        ? ((new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 1000).toFixed(0) + "s"
+        : "ongoing";
+      
+      console.log(`  ${cyan(session.session_id)}`);
+      console.log(`    ${dim("Started:")} ${startTime}`);
+      console.log(`    ${dim("Events:")}  ${session.event_count}`);
+      console.log(`    ${dim("Duration:")} ${duration}`);
+      console.log();
+    }
+    
+    console.log(dim("  Use --latest to view most recent session"));
+    console.log(dim("  Use <session_id> to view specific session"));
+    console.log();
+    return;
+  }
+  
+  // Get session (either by ID or latest)
+  let session: { session_id: string; file_path: string; event_count: number; start_time: string; end_time?: string; } | null = null;
+  
+  if (latest) {
+    session = getLatestSession(sessionsDir);
+    if (!session) {
+      p.log.error("No sessions found");
+      return;
+    }
+  } else if (sessionId) {
+    // Find session by ID (partial match)
+    const sessions = listSessionFiles(sessionsDir);
+    session = sessions.find(s => s.session_id.includes(sessionId!)) || null;
+    
+    if (!session) {
+      p.log.error(`Session not found: ${sessionId}`);
+      return;
+    }
+  }
+  
+  // Load and filter events
+  let events = parseSessionFile(session!.file_path);
+  
+  if (eventTypeFilter) {
+    events = filterEventsByType(events, eventTypeFilter);
+  }
+  
+  if (sinceMs !== null) {
+    events = filterEventsSince(events, sinceMs);
+  }
+  
+  // Apply limit
+  if (events.length > limit) {
+    events = events.slice(-limit);
+  }
+  
+  // Output
+  if (jsonOutput) {
+    console.log(JSON.stringify({ session_id: session!.session_id, events }, null, 2));
+    return;
+  }
+  
+  console.log(yellow(BANNER));
+  console.log(dim(`  Session: ${session!.session_id}\n`));
+  console.log(`  ${dim("Events:")}  ${events.length}/${session!.event_count}`);
+  if (eventTypeFilter) console.log(`  ${dim("Type:")}    ${eventTypeFilter}`);
+  if (sinceMs !== null) console.log(`  ${dim("Since:")}   ${args[args.indexOf("--since") + 1]}`);
+  console.log();
+  
+  for (const event of events) {
+    console.log("  " + formatEvent(event, true));
+  }
+  console.log();
+}
+
+// ============================================================================
 // Log Command - View swarm logs with filtering
 // ============================================================================
 
@@ -3225,6 +3522,12 @@ async function cells() {
 
 async function logs() {
   const args = process.argv.slice(3);
+  
+  // Check for 'sessions' subcommand
+  if (args[0] === "sessions") {
+    await logSessions();
+    return;
+  }
   
   // Parse arguments
   let moduleFilter: string | null = null;

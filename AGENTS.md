@@ -625,6 +625,19 @@ bun run eval:coordinator      # Coordinator protocol adherence
 
 **Real sessions** are captured during swarm runs to `~/.config/swarm-tools/sessions/`. These are actual coordinator decisions (worker spawns, reviews, etc.) that get scored.
 
+**How session capture works:**
+- **Automatic**: No manual instrumentation - tool calls are inspected in real-time
+- **Violation detection**: Pattern matching detects edit/write/test/reserve tool calls by coordinators
+- **JSONL format**: One event per line, append-only, streamable
+- **Event types**: DECISION, VIOLATION, OUTCOME, COMPACTION
+
+**See [evals/README.md - Coordinator Session Capture (Deep Dive)](packages/opencode-swarm-plugin/evals/README.md#coordinator-session-capture-deep-dive) for full details on:**
+- Capture flow diagram
+- Violation detection patterns
+- Event schema
+- Viewing sessions with `jq`
+- Integration points in code
+
 **Synthetic fixtures** in `evals/fixtures/` provide known-good and known-bad examples for baseline validation.
 
 ### Scorers

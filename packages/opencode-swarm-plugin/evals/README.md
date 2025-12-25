@@ -167,6 +167,119 @@ coordinator-behavior
    → overallDiscipline: 0.89 ✅ PASS (bootstrap phase, collecting data)
 ```
 
+#### Coordinator Session Capture (Deep Dive)
+
+**How it works:** Session capture is fully automatic when coordinator tools are used. No manual instrumentation needed.
+
+**Capture flow:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  SESSION CAPTURE FLOW                       │
+│                                                             │
+│  1. Coordinator tool call detected                          │
+│     ├─ swarm_decompose, hive_create_epic, etc.              │
+│     └─ Tool name + args inspected in real-time              │
+│                                                             │
+│  2. Violation detection (planning-guardrails.ts)            │
+│     ├─ detectCoordinatorViolation() checks patterns         │
+│     ├─ Edit/Write tools → coordinator_edited_file           │
+│     ├─ bash with test patterns → coordinator_ran_tests      │
+│     └─ swarmmail_reserve → coordinator_reserved_files       │
+│                                                             │
+│  3. Event emission (eval-capture.ts)                        │
+│     ├─ captureCoordinatorEvent() validates via Zod          │
+│     ├─ Appends JSONL line to session file                   │
+│     └─ ~/.config/swarm-tools/sessions/{session_id}.jsonl    │
+│                                                             │
+│  4. Eval consumption (coordinator-session.eval.ts)          │
+│     ├─ loadCapturedSessions() reads all *.jsonl files       │
+│     ├─ Parses events, reconstructs sessions                 │
+│     └─ Scorers analyze event sequences                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Event types:**
+
+| Event Type     | Subtypes                                                              | When Captured                        |
+| -------------- | --------------------------------------------------------------------- | ------------------------------------ |
+| `DECISION`     | strategy_selected, worker_spawned, review_completed, decomposition_complete | Coordinator makes decision           |
+| `VIOLATION`    | coordinator_edited_file, coordinator_ran_tests, coordinator_reserved_files, no_worker_spawned | Protocol violation detected          |
+| `OUTCOME`      | subtask_success, subtask_retry, subtask_failed, epic_complete        | Worker completes or epic finishes    |
+| `COMPACTION`   | detection_complete, prompt_generated, context_injected, resumption_started, tool_call_tracked | Compaction lifecycle events          |
+
+**Violation detection patterns** (from `planning-guardrails.ts`):
+
+```typescript
+// File modification detection
+VIOLATION_PATTERNS.FILE_MODIFICATION_TOOLS = ["edit", "write"];
+
+// Test execution detection (regex patterns in bash commands)
+VIOLATION_PATTERNS.TEST_EXECUTION_PATTERNS = [
+  /\bbun\s+test\b/i,
+  /\bnpm\s+(run\s+)?test/i,
+  /\bjest\b/i,
+  /\bvitest\b/i,
+  // ... and 6 more patterns
+];
+
+// File reservation detection
+VIOLATION_PATTERNS.RESERVATION_TOOLS = ["swarmmail_reserve", "agentmail_reserve"];
+```
+
+**Example session file** (`~/.config/swarm-tools/sessions/session-abc123.jsonl`):
+
+```jsonl
+{"session_id":"session-abc123","epic_id":"mjkw81rkq4c","timestamp":"2025-01-01T12:00:00Z","event_type":"DECISION","decision_type":"strategy_selected","payload":{"strategy":"feature-based"}}
+{"session_id":"session-abc123","epic_id":"mjkw81rkq4c","timestamp":"2025-01-01T12:01:00Z","event_type":"DECISION","decision_type":"decomposition_complete","payload":{"subtask_count":3}}
+{"session_id":"session-abc123","epic_id":"mjkw81rkq4c","timestamp":"2025-01-01T12:02:00Z","event_type":"DECISION","decision_type":"worker_spawned","payload":{"worker_id":"SwiftFire","bead_id":"mjkw81rkq4c.1"}}
+{"session_id":"session-abc123","epic_id":"mjkw81rkq4c","timestamp":"2025-01-01T12:05:00Z","event_type":"VIOLATION","violation_type":"coordinator_edited_file","payload":{"tool":"edit","file":"src/auth.ts"}}
+{"session_id":"session-abc123","epic_id":"mjkw81rkq4c","timestamp":"2025-01-01T12:10:00Z","event_type":"OUTCOME","outcome_type":"subtask_success","payload":{"bead_id":"mjkw81rkq4c.1","duration_ms":480000}}
+```
+
+**Viewing sessions:**
+
+```bash
+# List all captured sessions (coming soon)
+swarm log sessions
+
+# View specific session events
+cat ~/.config/swarm-tools/sessions/session-abc123.jsonl | jq .
+
+# Filter to violations only
+cat ~/.config/swarm-tools/sessions/*.jsonl | jq 'select(.event_type == "VIOLATION")'
+
+# Count violations by type
+cat ~/.config/swarm-tools/sessions/*.jsonl | jq -r 'select(.event_type == "VIOLATION") | .violation_type' | sort | uniq -c
+```
+
+**Why JSONL format?**
+
+- **Append-only**: No file locking, safe for concurrent writes
+- **Streamable**: Process events one-by-one without loading full file
+- **Line-oriented**: Easy to `grep`, `jq`, `tail -f` for live monitoring
+- **Fault-tolerant**: Corrupted line doesn't break entire file
+
+**Integration points:**
+
+| Where                      | What Gets Captured                        | File                    |
+| -------------------------- | ----------------------------------------- | ----------------------- |
+| `swarm_decompose`          | DECISION: strategy_selected, decomposition_complete | sessions/*.jsonl        |
+| `swarm_spawn_subtask`      | DECISION: worker_spawned                  | sessions/*.jsonl        |
+| `swarm_review`             | DECISION: review_completed                | sessions/*.jsonl        |
+| `swarm_complete`           | OUTCOME: subtask_success/failed           | sessions/*.jsonl        |
+| Tool call inspection       | VIOLATION: (real-time pattern matching)   | sessions/*.jsonl        |
+| Compaction hook            | COMPACTION: (all lifecycle stages)        | sessions/*.jsonl        |
+
+**Source files:**
+
+- **Schema**: `src/eval-capture.ts` - CoordinatorEventSchema (Zod discriminated union)
+- **Violation detection**: `src/planning-guardrails.ts` - detectCoordinatorViolation()
+- **Capture**: `src/eval-capture.ts` - captureCoordinatorEvent()
+- **Scorers**: `evals/scorers/coordinator-discipline.ts` - violationCount, spawnEfficiency, etc.
+- **Eval**: `evals/coordinator-session.eval.ts` - Real sessions + fixtures
+
 ### Compaction Prompt (`compaction-prompt.eval.ts`)
 
 **What it measures:** Quality of continuation prompts after context compaction

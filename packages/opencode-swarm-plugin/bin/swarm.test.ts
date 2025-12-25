@@ -198,6 +198,412 @@ READ-ONLY research agent. Never modifies code - only gathers intel and stores fi
 // ============================================================================
 
 // ============================================================================
+// Session Log Tests (TDD)
+// ============================================================================
+
+import type { CoordinatorEvent } from "../src/eval-capture";
+
+const TEST_SESSIONS_DIR = join(tmpdir(), "swarm-test-sessions");
+
+describe("swarm log sessions", () => {
+  beforeEach(() => {
+    // Create test sessions directory
+    if (!existsSync(TEST_SESSIONS_DIR)) {
+      mkdirSync(TEST_SESSIONS_DIR, { recursive: true });
+    }
+  });
+
+  afterEach(() => {
+    // Cleanup test directory
+    if (existsSync(TEST_SESSIONS_DIR)) {
+      rmSync(TEST_SESSIONS_DIR, { recursive: true, force: true });
+    }
+  });
+
+  // ========================================================================
+  // Helper Functions (to be implemented in swarm.ts)
+  // ========================================================================
+
+  function createTestSession(
+    sessionId: string,
+    epicId: string,
+    eventCount: number,
+    baseTimestamp?: number,
+  ): void {
+    const filePath = join(TEST_SESSIONS_DIR, `${sessionId}.jsonl`);
+    const lines: string[] = [];
+    const base = baseTimestamp || Date.now();
+
+    for (let i = 0; i < eventCount; i++) {
+      const event: CoordinatorEvent = {
+        session_id: sessionId,
+        epic_id: epicId,
+        timestamp: new Date(base - (eventCount - i) * 1000).toISOString(),
+        event_type: "DECISION",
+        decision_type: "worker_spawned",
+        payload: { worker_id: `worker-${i}` },
+      };
+      lines.push(JSON.stringify(event));
+    }
+
+    writeFileSync(filePath, lines.join("\n") + "\n");
+  }
+
+  /**
+   * Parse a session file and return events
+   */
+  function parseSessionFile(filePath: string): CoordinatorEvent[] {
+    if (!existsSync(filePath)) {
+      throw new Error(`Session file not found: ${filePath}`);
+    }
+
+    const content = readFileSync(filePath, "utf-8");
+    const lines = content.split("\n").filter((line) => line.trim());
+    const events: CoordinatorEvent[] = [];
+
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line);
+        events.push(parsed);
+      } catch {
+        // Skip invalid JSON lines
+      }
+    }
+
+    return events;
+  }
+
+  /**
+   * List all session files in a directory
+   */
+  function listSessionFiles(
+    dir: string,
+  ): Array<{
+    session_id: string;
+    file_path: string;
+    event_count: number;
+    start_time: string;
+    end_time?: string;
+  }> {
+    if (!existsSync(dir)) return [];
+
+    const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+    const sessions: Array<{
+      session_id: string;
+      file_path: string;
+      event_count: number;
+      start_time: string;
+      end_time?: string;
+    }> = [];
+
+    for (const file of files) {
+      const filePath = join(dir, file);
+      try {
+        const events = parseSessionFile(filePath);
+        if (events.length === 0) continue;
+
+        const timestamps = events.map((e) => new Date(e.timestamp).getTime());
+        const startTime = new Date(Math.min(...timestamps)).toISOString();
+        const endTime =
+          timestamps.length > 1
+            ? new Date(Math.max(...timestamps)).toISOString()
+            : undefined;
+
+        sessions.push({
+          session_id: events[0].session_id,
+          file_path: filePath,
+          event_count: events.length,
+          start_time: startTime,
+          end_time: endTime,
+        });
+      } catch {
+        // Skip invalid files
+      }
+    }
+
+    // Sort by start time (newest first)
+    return sessions.sort((a, b) =>
+      new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+    );
+  }
+
+  /**
+   * Get the latest session file
+   */
+  function getLatestSession(
+    dir: string,
+  ): {
+    session_id: string;
+    file_path: string;
+    event_count: number;
+    start_time: string;
+    end_time?: string;
+  } | null {
+    const sessions = listSessionFiles(dir);
+    return sessions.length > 0 ? sessions[0] : null;
+  }
+
+  /**
+   * Filter events by type
+   */
+  function filterEventsByType(
+    events: CoordinatorEvent[],
+    eventType: string,
+  ): CoordinatorEvent[] {
+    if (eventType === "all") return events;
+    return events.filter((e) => e.event_type === eventType.toUpperCase());
+  }
+
+  /**
+   * Filter events by time
+   */
+  function filterEventsSince(
+    events: CoordinatorEvent[],
+    sinceMs: number,
+  ): CoordinatorEvent[] {
+    const cutoffTime = Date.now() - sinceMs;
+    return events.filter((e) =>
+      new Date(e.timestamp).getTime() >= cutoffTime
+    );
+  }
+
+  // ========================================================================
+  // Tests
+  // ========================================================================
+
+  describe("listSessionFiles", () => {
+    test("returns empty array when directory doesn't exist", () => {
+      const result = listSessionFiles("/nonexistent/directory");
+      expect(result).toEqual([]);
+    });
+
+    test("returns empty array when directory is empty", () => {
+      const result = listSessionFiles(TEST_SESSIONS_DIR);
+      expect(result).toEqual([]);
+    });
+
+    test("lists all session files with metadata", () => {
+      createTestSession("ses_abc123", "epic-1", 5);
+      createTestSession("ses_def456", "epic-2", 3);
+
+      const result = listSessionFiles(TEST_SESSIONS_DIR);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].session_id).toMatch(/^ses_/);
+      expect(result[0].event_count).toBeGreaterThan(0);
+      expect(result[0].start_time).toBeTruthy();
+    });
+
+    test("calculates event count correctly", () => {
+      createTestSession("ses_test", "epic-1", 10);
+
+      const result = listSessionFiles(TEST_SESSIONS_DIR);
+
+      expect(result[0].event_count).toBe(10);
+    });
+
+    test("extracts start and end times from events", () => {
+      createTestSession("ses_test", "epic-1", 5);
+
+      const result = listSessionFiles(TEST_SESSIONS_DIR);
+
+      expect(result[0].start_time).toBeTruthy();
+      expect(new Date(result[0].start_time).getTime()).toBeLessThan(Date.now());
+    });
+
+    test("sorts sessions by start time (newest first)", () => {
+      // Create sessions with explicit different timestamps
+      const oldTime = Date.now() - 60000; // 1 minute ago
+      const newTime = Date.now();
+      
+      createTestSession("ses_old", "epic-1", 2, oldTime);
+      createTestSession("ses_new", "epic-2", 2, newTime);
+
+      const result = listSessionFiles(TEST_SESSIONS_DIR);
+
+      expect(result[0].session_id).toBe("ses_new");
+      expect(result[1].session_id).toBe("ses_old");
+    });
+  });
+
+  describe("parseSessionFile", () => {
+    test("parses valid JSONL session file", () => {
+      createTestSession("ses_parse", "epic-1", 3);
+      const filePath = join(TEST_SESSIONS_DIR, "ses_parse.jsonl");
+
+      const events = parseSessionFile(filePath);
+
+      expect(events).toHaveLength(3);
+      expect(events[0].session_id).toBe("ses_parse");
+      expect(events[0].event_type).toBe("DECISION");
+    });
+
+    test("handles file with trailing newlines", () => {
+      const filePath = join(TEST_SESSIONS_DIR, "ses_trailing.jsonl");
+      writeFileSync(
+        filePath,
+        '{"session_id":"test","epic_id":"e1","timestamp":"2025-01-01T00:00:00Z","event_type":"DECISION","decision_type":"worker_spawned","payload":{}}\n\n\n',
+      );
+
+      const events = parseSessionFile(filePath);
+
+      expect(events).toHaveLength(1);
+    });
+
+    test("skips invalid JSON lines", () => {
+      const filePath = join(TEST_SESSIONS_DIR, "ses_invalid.jsonl");
+      writeFileSync(
+        filePath,
+        '{"session_id":"test","epic_id":"e1","timestamp":"2025-01-01T00:00:00Z","event_type":"DECISION","decision_type":"worker_spawned","payload":{}}\ninvalid json\n{"session_id":"test","epic_id":"e1","timestamp":"2025-01-01T00:00:00Z","event_type":"OUTCOME","outcome_type":"subtask_success","payload":{}}\n',
+      );
+
+      const events = parseSessionFile(filePath);
+
+      expect(events).toHaveLength(2);
+    });
+
+    test("throws error for non-existent file", () => {
+      expect(() => parseSessionFile("/nonexistent/file.jsonl")).toThrow();
+    });
+  });
+
+  describe("getLatestSession", () => {
+    test("returns null when directory is empty", () => {
+      const result = getLatestSession(TEST_SESSIONS_DIR);
+      expect(result).toBeNull();
+    });
+
+    test("returns the most recent session", () => {
+      const oldTime = Date.now() - 60000; // 1 minute ago
+      const newTime = Date.now();
+      
+      createTestSession("ses_old", "epic-1", 2, oldTime);
+      createTestSession("ses_new", "epic-2", 3, newTime);
+
+      const result = getLatestSession(TEST_SESSIONS_DIR);
+
+      expect(result).not.toBeNull();
+      expect(result!.session_id).toBe("ses_new");
+    });
+  });
+
+  describe("filterEventsByType", () => {
+    test("filters DECISION events only", () => {
+      const events: CoordinatorEvent[] = [
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: "2025-01-01T00:00:00Z",
+          event_type: "DECISION",
+          decision_type: "worker_spawned",
+          payload: {},
+        },
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: "2025-01-01T00:01:00Z",
+          event_type: "VIOLATION",
+          violation_type: "coordinator_edited_file",
+          payload: {},
+        },
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: "2025-01-01T00:02:00Z",
+          event_type: "DECISION",
+          decision_type: "review_completed",
+          payload: {},
+        },
+      ];
+
+      const result = filterEventsByType(events, "DECISION");
+
+      expect(result).toHaveLength(2);
+      expect(result.every((e) => e.event_type === "DECISION")).toBe(true);
+    });
+
+    test("returns all events when type is 'all'", () => {
+      const events: CoordinatorEvent[] = [
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: "2025-01-01T00:00:00Z",
+          event_type: "DECISION",
+          decision_type: "worker_spawned",
+          payload: {},
+        },
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: "2025-01-01T00:01:00Z",
+          event_type: "VIOLATION",
+          violation_type: "coordinator_edited_file",
+          payload: {},
+        },
+      ];
+
+      const result = filterEventsByType(events, "all");
+
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  describe("filterEventsSince", () => {
+    test("filters events within time window", () => {
+      const now = Date.now();
+      const events: CoordinatorEvent[] = [
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: new Date(now - 10000).toISOString(), // 10s ago
+          event_type: "DECISION",
+          decision_type: "worker_spawned",
+          payload: {},
+        },
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: new Date(now - 60000).toISOString(), // 1m ago
+          event_type: "VIOLATION",
+          violation_type: "coordinator_edited_file",
+          payload: {},
+        },
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: new Date(now - 3000).toISOString(), // 3s ago
+          event_type: "OUTCOME",
+          outcome_type: "subtask_success",
+          payload: {},
+        },
+      ];
+
+      const result = filterEventsSince(events, 30000); // Last 30s
+
+      expect(result).toHaveLength(2); // 10s and 3s ago
+    });
+
+    test("returns all events when sinceMs is very large", () => {
+      const now = Date.now();
+      const events: CoordinatorEvent[] = [
+        {
+          session_id: "s1",
+          epic_id: "e1",
+          timestamp: new Date(now - 1000).toISOString(),
+          event_type: "DECISION",
+          decision_type: "worker_spawned",
+          payload: {},
+        },
+      ];
+
+      const result = filterEventsSince(events, 86400000); // 1 day
+
+      expect(result).toHaveLength(1);
+    });
+  });
+});
+
+// ============================================================================
 // Cells Command Tests (TDD)
 // ============================================================================
 

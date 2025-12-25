@@ -729,6 +729,8 @@ export {
  * Includes:
  * - SWARM_COMPACTION_CONTEXT - Prompt text for swarm state preservation
  * - createCompactionHook - Factory function for the compaction hook
+ * - scanSessionMessages - Scan session for swarm state
+ * - ScannedSwarmState - Scanned state interface
  *
  * Usage:
  * ```typescript
@@ -739,7 +741,56 @@ export {
  * };
  * ```
  */
-export { SWARM_COMPACTION_CONTEXT, createCompactionHook } from "./compaction-hook";
+export { 
+  SWARM_COMPACTION_CONTEXT, 
+  createCompactionHook,
+  scanSessionMessages,
+  type ScannedSwarmState,
+} from "./compaction-hook";
+
+/**
+ * Re-export compaction-observability module
+ *
+ * Includes:
+ * - CompactionPhase - Enum of compaction phases
+ * - createMetricsCollector - Create a metrics collector
+ * - recordPhaseStart, recordPhaseComplete - Phase timing
+ * - recordPatternExtracted, recordPatternSkipped - Pattern tracking
+ * - getMetricsSummary - Get metrics summary
+ *
+ * Types:
+ * - CompactionMetrics - Mutable metrics collector
+ * - CompactionMetricsSummary - Read-only summary snapshot
+ *
+ * Features:
+ * - Phase timing breakdown (START, GATHER, DETECT, INJECT, COMPLETE)
+ * - Pattern extraction tracking with reasons
+ * - Success rate calculation
+ * - Debug mode for verbose details
+ * - JSON serializable for persistence
+ *
+ * Usage:
+ * ```typescript
+ * import { createMetricsCollector, CompactionPhase, recordPhaseStart } from "opencode-swarm-plugin";
+ *
+ * const metrics = createMetricsCollector({ session_id: "abc123" });
+ * recordPhaseStart(metrics, CompactionPhase.DETECT);
+ * // ... work ...
+ * recordPhaseComplete(metrics, CompactionPhase.DETECT);
+ * const summary = getMetricsSummary(metrics);
+ * ```
+ */
+export {
+  CompactionPhase,
+  createMetricsCollector,
+  recordPhaseStart,
+  recordPhaseComplete,
+  recordPatternExtracted,
+  recordPatternSkipped,
+  getMetricsSummary,
+  type CompactionMetrics,
+  type CompactionMetricsSummary,
+} from "./compaction-observability";
 
 /**
  * Re-export memory module
