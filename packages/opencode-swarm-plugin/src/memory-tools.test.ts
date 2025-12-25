@@ -24,6 +24,7 @@ describe("memory tools integration", () => {
 		expect(toolNames).toContain("semantic-memory_list");
 		expect(toolNames).toContain("semantic-memory_stats");
 		expect(toolNames).toContain("semantic-memory_check");
+		expect(toolNames).toContain("semantic-memory_upsert");
 	});
 
 	test("tools have execute functions", () => {
@@ -106,6 +107,89 @@ describe("memory tools integration", () => {
 			expect(typeof result).toBe("string");
 			const parsed = JSON.parse(result);
 			expect(typeof parsed.ollama).toBe("boolean");
+		});
+	});
+
+	describe("semantic-memory_upsert", () => {
+		test("returns valid ADD operation result", async () => {
+			const tool = memoryTools["semantic-memory_upsert"];
+			const result = await tool.execute(
+				{
+					information: "Test memory for plugin tool",
+					tags: "test,plugin",
+				},
+				{ sessionID: "test-session" } as any,
+			);
+
+			const parsed = JSON.parse(result);
+			
+			expect(parsed.operation).toBe("ADD");
+			expect(parsed.reason).toBeDefined();
+			expect(parsed.memoryId).toBeDefined();
+			expect(parsed.memoryId).toMatch(/^mem_/);
+		});
+
+		test("includes autoTags when enabled", async () => {
+			const tool = memoryTools["semantic-memory_upsert"];
+			const result = await tool.execute(
+				{
+					information: "TypeScript is a typed superset of JavaScript",
+					autoTag: true,
+				},
+				{ sessionID: "test-session" } as any,
+			);
+
+			const parsed = JSON.parse(result);
+			
+			expect(parsed.autoTags).toBeDefined();
+			expect(parsed.autoTags.tags).toBeInstanceOf(Array);
+			expect(parsed.autoTags.keywords).toBeInstanceOf(Array);
+			expect(parsed.autoTags.category).toBe("general");
+		});
+
+		test("includes linksCreated when autoLink enabled", async () => {
+			const tool = memoryTools["semantic-memory_upsert"];
+			const result = await tool.execute(
+				{
+					information: "React hooks enable functional components to use state",
+					autoLink: true,
+				},
+				{ sessionID: "test-session" } as any,
+			);
+
+			const parsed = JSON.parse(result);
+			
+			expect(parsed.linksCreated).toBeDefined();
+			expect(typeof parsed.linksCreated).toBe("number");
+		});
+
+		test("includes entitiesExtracted when extractEntities enabled", async () => {
+			const tool = memoryTools["semantic-memory_upsert"];
+			const result = await tool.execute(
+				{
+					information: "Next.js 15 was released by Vercel in October 2024",
+					extractEntities: true,
+				},
+				{ sessionID: "test-session" } as any,
+			);
+
+			const parsed = JSON.parse(result);
+			
+			expect(parsed.entitiesExtracted).toBeDefined();
+			expect(typeof parsed.entitiesExtracted).toBe("number");
+		});
+
+		test("throws error when information is missing", async () => {
+			const tool = memoryTools["semantic-memory_upsert"];
+			
+			await expect(async () => {
+				await tool.execute(
+					{
+						tags: "test",
+					} as any,
+					{ sessionID: "test-session" } as any,
+				);
+			}).toThrow("information is required");
 		});
 	});
 });

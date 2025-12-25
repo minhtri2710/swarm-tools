@@ -5,6 +5,8 @@
 **🌐 Website:** [swarmtools.ai](https://swarmtools.ai)  
 **📚 Full Documentation:** [swarmtools.ai/docs](https://swarmtools.ai/docs)
 
+[![Eval Gate](https://github.com/joelhooks/opencode-swarm-plugin/actions/workflows/eval-gate.yml/badge.svg)](https://github.com/joelhooks/opencode-swarm-plugin/actions/workflows/eval-gate.yml)
+
 ```
  ███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗
  ██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║

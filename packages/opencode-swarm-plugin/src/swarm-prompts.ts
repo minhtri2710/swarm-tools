@@ -15,6 +15,7 @@
 import { tool } from "@opencode-ai/plugin";
 import { generateWorkerHandoff } from "./swarm-orchestrate";
 import { captureCoordinatorEvent } from "./eval-capture.js";
+import { getMemoryAdapter } from "./memory-tools.js";
 
 // ============================================================================
 // Prompt Templates
@@ -1096,6 +1097,50 @@ For each criterion, assess passed/failed and provide brief feedback:
 
 If any criterion fails, the overall evaluation fails and retry_suggestion 
 should describe what needs to be fixed.`;
+
+// ============================================================================
+// Eval Failure Learning Integration
+// ============================================================================
+
+/**
+ * Query recent eval failures from semantic memory
+ * 
+ * Coordinators call this at session start to learn from recent eval regressions.
+ * Returns formatted string for injection into coordinator prompts.
+ * 
+ * @returns Formatted string of recent failures (empty if none or memory unavailable)
+ */
+export async function getRecentEvalFailures(): Promise<string> {
+  try {
+    const adapter = await getMemoryAdapter();
+    
+    // Query memories for eval failures
+    const result = await adapter.find({
+      query: "eval-failure regression coordinator",
+      limit: 3,
+    });
+    
+    if (result.count === 0) {
+      return "";
+    }
+    
+    const lines = result.results.map((f) => `- ${f.content.slice(0, 200)}...`);
+    
+    return `
+## ⚠️ Recent Eval Failures (Learn From These)
+
+The following eval regressions were detected recently. Avoid these patterns:
+
+${lines.join("\n")}
+
+**Action:** Review these failures and ensure your coordination avoids similar issues.
+`;
+  } catch (e) {
+    // Best effort - don't fail if memory unavailable
+    console.warn("Failed to query eval failures:", e);
+    return "";
+  }
+}
 
 // ============================================================================
 // Helper Functions

@@ -939,3 +939,42 @@ describe("formatCoordinatorPrompt", () => {
     expect(result).toContain("Phase 1.5:");
   });
 });
+
+describe("getRecentEvalFailures", () => {
+  test("returns empty string when no failures exist", async () => {
+    const { getRecentEvalFailures } = await import("./swarm-prompts");
+    const result = await getRecentEvalFailures();
+    
+    // Should not throw and returns string
+    expect(typeof result).toBe("string");
+    // When no failures, returns empty or a message - either is acceptable
+  });
+  
+  test("returns formatted string when failures exist", async () => {
+    const { getRecentEvalFailures } = await import("./swarm-prompts");
+    
+    // This test depends on actual memory state
+    // Just verify it doesn't throw and returns a string
+    const result = await getRecentEvalFailures();
+    expect(typeof result).toBe("string");
+  });
+  
+  test("includes warning emoji in header when failures present", async () => {
+    const { getRecentEvalFailures } = await import("./swarm-prompts");
+    
+    // If there are failures in the system, the header should have ⚠️
+    const result = await getRecentEvalFailures();
+    
+    // Either empty (no failures) or contains the warning section
+    if (result.length > 0) {
+      expect(result).toMatch(/⚠️|Recent Eval Failures/);
+    }
+  });
+  
+  test("handles memory adapter errors gracefully", async () => {
+    const { getRecentEvalFailures } = await import("./swarm-prompts");
+    
+    // Should not throw even if memory is unavailable
+    await expect(getRecentEvalFailures()).resolves.toBeDefined();
+  });
+});

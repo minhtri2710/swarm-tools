@@ -3,12 +3,17 @@
  *
  * Tests the Ollama Effect-TS service with mocked fetch calls.
  * Following TDD: write tests first, then implementation.
+ *
+ * IMPORTANT: We save and restore global.fetch to avoid breaking other tests.
  */
 
-import { describe, test, expect, beforeEach, mock } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Ollama, makeOllamaLive } from "./ollama.js";
 import type { MemoryConfig } from "../types/index.js";
+
+// Save original fetch to restore after each test
+const originalFetch = global.fetch;
 
 // ============================================================================
 // Test Fixtures
@@ -45,6 +50,11 @@ const mockHealthResponse = (models: Array<{ name: string }>) =>
 // ============================================================================
 
 describe("Ollama Service", () => {
+	// Restore fetch after each test to avoid breaking other tests
+	afterEach(() => {
+		global.fetch = originalFetch;
+	});
+
 	describe("embed (single text)", () => {
 		test("generates embedding for text", async () => {
 			const mockFetch = mock(() => mockSuccessResponse(mockEmbedding));

@@ -45,7 +45,7 @@ describe("memory adapter", () => {
 			});
 
 			expect(result.id).toBeDefined();
-			expect(result.id).toMatch(/^mem_/);
+			expect(result.id).toMatch(/^mem-/); // Real swarm-mail adapter uses 'mem-' prefix
 			expect(result.message).toContain("Stored memory");
 		});
 
@@ -55,7 +55,7 @@ describe("memory adapter", () => {
 				collection: "project-alpha",
 			});
 
-			expect(result.id).toMatch(/^mem_/);
+			expect(result.id).toMatch(/^mem-/); // Real swarm-mail adapter uses 'mem-' prefix
 			expect(result.message).toContain("collection: project-alpha");
 		});
 	});

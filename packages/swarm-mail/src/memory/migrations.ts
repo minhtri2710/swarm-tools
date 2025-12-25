@@ -161,7 +161,118 @@ export const memoryMigrationLibSQL: Migration = {
 };
 
 /**
+ * Migration v10 (libSQL): Schema overhaul - Memory links, entities, relationships, temporal fields
+ *
+ * Implements features from Mem0/A-MEM research:
+ * 1. Memory Linking (Zettelkasten-style bidirectional connections)
+ * 2. Entity/Relationship Extraction (knowledge graph)
+ * 3. Temporal Validity Windows
+ * 4. Auto-generated metadata (auto_tags, keywords)
+ *
+ * New tables:
+ * - memory_links: Bidirectional links between memories
+ * - entities: Named entities extracted from memories
+ * - relationships: Subject-predicate-object triples
+ * - memory_entities: Junction table linking memories to entities
+ *
+ * New columns on memories:
+ * - valid_from, valid_until: Temporal validity
+ * - superseded_by: Memory supersession chains
+ * - auto_tags: LLM-generated tags
+ * - keywords: Space-separated keywords for FTS boost
+ */
+export const memorySchemaOverhaulLibSQL: Migration = {
+  version: 10,
+  description: "Memory schema overhaul: links, entities, relationships, temporal fields",
+  up: `
+    -- ========================================================================
+    -- Add temporal and metadata columns to memories table
+    -- ========================================================================
+    ALTER TABLE memories ADD COLUMN valid_from TEXT;
+    ALTER TABLE memories ADD COLUMN valid_until TEXT;
+    ALTER TABLE memories ADD COLUMN superseded_by TEXT REFERENCES memories(id);
+    ALTER TABLE memories ADD COLUMN auto_tags TEXT;
+    ALTER TABLE memories ADD COLUMN keywords TEXT;
+
+    -- ========================================================================
+    -- Memory Links Table (Zettelkasten-style bidirectional connections)
+    -- ========================================================================
+    CREATE TABLE IF NOT EXISTS memory_links (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      target_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      link_type TEXT NOT NULL,
+      strength REAL DEFAULT 1.0,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(source_id, target_id, link_type)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_memory_links_source ON memory_links(source_id);
+    CREATE INDEX IF NOT EXISTS idx_memory_links_target ON memory_links(target_id);
+
+    -- ========================================================================
+    -- Entities Table (Named entities extracted from memories)
+    -- ========================================================================
+    CREATE TABLE IF NOT EXISTS entities (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      canonical_name TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(name, entity_type)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);
+    CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name);
+
+    -- ========================================================================
+    -- Relationships Table (Entity-entity triples)
+    -- ========================================================================
+    CREATE TABLE IF NOT EXISTS relationships (
+      id TEXT PRIMARY KEY,
+      subject_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      predicate TEXT NOT NULL,
+      object_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      memory_id TEXT REFERENCES memories(id) ON DELETE SET NULL,
+      confidence REAL DEFAULT 1.0,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(subject_id, predicate, object_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_relationships_subject ON relationships(subject_id);
+    CREATE INDEX IF NOT EXISTS idx_relationships_object ON relationships(object_id);
+    CREATE INDEX IF NOT EXISTS idx_relationships_predicate ON relationships(predicate);
+
+    -- ========================================================================
+    -- Memory-Entities Junction Table
+    -- ========================================================================
+    CREATE TABLE IF NOT EXISTS memory_entities (
+      memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      role TEXT,
+      PRIMARY KEY(memory_id, entity_id)
+    );
+  `,
+  down: `
+    -- Drop tables in dependency order
+    DROP TABLE IF EXISTS memory_entities;
+    DROP TABLE IF EXISTS relationships;
+    DROP INDEX IF EXISTS idx_memory_links_source;
+    DROP INDEX IF EXISTS idx_memory_links_target;
+    DROP TABLE IF EXISTS memory_links;
+    DROP INDEX IF EXISTS idx_entities_type;
+    DROP INDEX IF EXISTS idx_entities_name;
+    DROP TABLE IF EXISTS entities;
+
+    -- Remove columns from memories table (SQLite doesn't support DROP COLUMN until 3.35.0)
+    -- In production, these columns can be left as NULL if downgrade is needed
+    -- Or recreate table without these columns
+  `,
+};
+
+/**
  * Export memory migrations array
  */
 export const memoryMigrations: Migration[] = [memoryMigration];
-export const memoryMigrationsLibSQL: Migration[] = [memoryMigrationLibSQL];
+export const memoryMigrationsLibSQL: Migration[] = [memoryMigrationLibSQL, memorySchemaOverhaulLibSQL];

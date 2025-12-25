@@ -14,19 +14,18 @@ evalite("Example: Basic scorer test", {
   data: async () => {
     return [
       {
-        input: "Test task",
-        output: JSON.stringify({
+        input: {
           epic: { title: "Test Epic", description: "Test" },
           subtasks: [
             { title: "Subtask 1", files: ["a.ts"], estimated_complexity: 1 },
             { title: "Subtask 2", files: ["b.ts"], estimated_complexity: 1 },
           ],
-        }),
+        },
       },
     ];
   },
   task: async (input) => {
-    return input; // passthrough for testing
+    return JSON.stringify(input);
   },
   scorers: [subtaskIndependence],
 });

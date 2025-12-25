@@ -10,3 +10,254 @@
 {"timestamp":"2025-12-25T05:11:18.469Z","eval_name":"coordinator-behavior","score":0.85,"run_count":3}
 {"timestamp":"2025-12-25T05:11:18.469Z","eval_name":"coordinator-session","score":0.85,"run_count":3}
 {"timestamp":"2025-12-25T05:11:18.469Z","eval_name":"swarm-decomposition","score":0.85,"run_count":3}
+{"timestamp":"2025-12-25T16:30:42.957Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.957Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.957Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.957Z","eval_name":"Swarm Decomposition Quality","score":0.7213888888888889,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.957Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.957Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.957Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"No False Positives","score":1,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"Example: Basic scorer test","score":1,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"Placeholder Detection","score":0,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"Generic Instructions Fail","score":0,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"First Tool Discipline","score":0,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":1}
+{"timestamp":"2025-12-25T16:30:42.958Z","eval_name":"Coordinator Behavior After Compaction","score":0.8645833333333333,"run_count":1}
+{"timestamp":"2025-12-25T16:30:43.088Z","eval_name":"Example: Basic scorer test","score":1,"run_count":2}
+{"timestamp":"2025-12-25T16:30:43.202Z","eval_name":"Example: Basic scorer test","score":1,"run_count":3}
+{"timestamp":"2025-12-25T16:30:43.316Z","eval_name":"Example: Basic scorer test","score":1,"run_count":4}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Swarm Decomposition Quality","score":0.6748148148148146,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"No False Positives","score":1,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Example: Basic scorer test","score":1,"run_count":5}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Coordinator Behavior After Compaction","score":1,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Placeholder Detection","score":0,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Generic Instructions Fail","score":0,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"First Tool Discipline","score":0,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.738Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":2}
+{"timestamp":"2025-12-25T16:31:17.874Z","eval_name":"Example: Basic scorer test","score":1,"run_count":6}
+{"timestamp":"2025-12-25T16:31:17.995Z","eval_name":"Example: Basic scorer test","score":1,"run_count":7}
+{"timestamp":"2025-12-25T16:31:18.113Z","eval_name":"Example: Basic scorer test","score":1,"run_count":8}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Swarm Decomposition Quality","score":0.6988888888888889,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"No False Positives","score":1,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Example: Basic scorer test","score":1,"run_count":9}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.807Z","eval_name":"Placeholder Detection","score":0,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.808Z","eval_name":"Generic Instructions Fail","score":0,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.808Z","eval_name":"First Tool Discipline","score":0,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.808Z","eval_name":"Coordinator Behavior After Compaction","score":1,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.808Z","eval_name":"Coordinator Resists Direct Implementation","score":0.9375,"run_count":3}
+{"timestamp":"2025-12-25T16:32:49.943Z","eval_name":"Example: Basic scorer test","score":1,"run_count":10}
+{"timestamp":"2025-12-25T16:32:50.073Z","eval_name":"Example: Basic scorer test","score":1,"run_count":11}
+{"timestamp":"2025-12-25T16:32:50.199Z","eval_name":"Example: Basic scorer test","score":1,"run_count":12}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Swarm Decomposition Quality","score":0.6798611111111109,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"No False Positives","score":1,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.083Z","eval_name":"Example: Basic scorer test","score":1,"run_count":13}
+{"timestamp":"2025-12-25T16:35:31.084Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.084Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.084Z","eval_name":"Placeholder Detection","score":0,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.084Z","eval_name":"Generic Instructions Fail","score":0,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.084Z","eval_name":"First Tool Discipline","score":0,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.084Z","eval_name":"Coordinator Resists Direct Implementation","score":0.9375,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.084Z","eval_name":"Coordinator Behavior After Compaction","score":0.8645833333333333,"run_count":4}
+{"timestamp":"2025-12-25T16:35:31.221Z","eval_name":"Example: Basic scorer test","score":1,"run_count":14}
+{"timestamp":"2025-12-25T16:35:31.329Z","eval_name":"Example: Basic scorer test","score":1,"run_count":15}
+{"timestamp":"2025-12-25T16:35:31.444Z","eval_name":"Example: Basic scorer test","score":1,"run_count":16}
+{"timestamp":"2025-12-25T16:35:31.685Z","eval_name":"Example: Basic scorer test","score":1,"run_count":17}
+{"timestamp":"2025-12-25T16:35:31.843Z","eval_name":"Example: Basic scorer test","score":1,"run_count":18}
+{"timestamp":"2025-12-25T16:35:31.962Z","eval_name":"Example: Basic scorer test","score":1,"run_count":19}
+{"timestamp":"2025-12-25T16:35:32.076Z","eval_name":"Example: Basic scorer test","score":1,"run_count":20}
+{"timestamp":"2025-12-25T16:36:03.596Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.596Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Swarm Decomposition Quality","score":0.6845833333333333,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"No False Positives","score":1,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Example: Basic scorer test","score":1,"run_count":21}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Placeholder Detection","score":0,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Generic Instructions Fail","score":0,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"First Tool Discipline","score":0,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Coordinator Behavior After Compaction","score":1,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.597Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":5}
+{"timestamp":"2025-12-25T16:36:03.727Z","eval_name":"Example: Basic scorer test","score":1,"run_count":22}
+{"timestamp":"2025-12-25T16:36:03.842Z","eval_name":"Example: Basic scorer test","score":1,"run_count":23}
+{"timestamp":"2025-12-25T16:36:03.951Z","eval_name":"Example: Basic scorer test","score":1,"run_count":24}
+{"timestamp":"2025-12-25T16:36:04.183Z","eval_name":"Example: Basic scorer test","score":1,"run_count":25}
+{"timestamp":"2025-12-25T16:36:04.330Z","eval_name":"Example: Basic scorer test","score":1,"run_count":26}
+{"timestamp":"2025-12-25T16:36:04.445Z","eval_name":"Example: Basic scorer test","score":1,"run_count":27}
+{"timestamp":"2025-12-25T16:36:04.555Z","eval_name":"Example: Basic scorer test","score":1,"run_count":28}
+{"timestamp":"2025-12-25T16:36:32.176Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.176Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.176Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.176Z","eval_name":"Swarm Decomposition Quality","score":0.6852777777777778,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.176Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.176Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.176Z","eval_name":"No False Positives","score":1,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Example: Basic scorer test","score":1,"run_count":29}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Placeholder Detection","score":0,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Generic Instructions Fail","score":0,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"First Tool Discipline","score":0,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Coordinator Behavior After Compaction","score":0.978125,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.177Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":6}
+{"timestamp":"2025-12-25T16:36:32.305Z","eval_name":"Example: Basic scorer test","score":1,"run_count":30}
+{"timestamp":"2025-12-25T16:36:32.416Z","eval_name":"Example: Basic scorer test","score":1,"run_count":31}
+{"timestamp":"2025-12-25T16:36:32.527Z","eval_name":"Example: Basic scorer test","score":1,"run_count":32}
+{"timestamp":"2025-12-25T16:36:32.755Z","eval_name":"Example: Basic scorer test","score":1,"run_count":33}
+{"timestamp":"2025-12-25T16:36:32.957Z","eval_name":"Example: Basic scorer test","score":1,"run_count":34}
+{"timestamp":"2025-12-25T16:36:33.071Z","eval_name":"Example: Basic scorer test","score":1,"run_count":35}
+{"timestamp":"2025-12-25T16:36:33.180Z","eval_name":"Example: Basic scorer test","score":1,"run_count":36}
+{"timestamp":"2025-12-25T16:38:02.146Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Swarm Decomposition Quality","score":0.6726388888888888,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"No False Positives","score":1,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Example: Basic scorer test","score":1,"run_count":37}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Placeholder Detection","score":0,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"Generic Instructions Fail","score":0,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.147Z","eval_name":"First Tool Discipline","score":0,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.148Z","eval_name":"Coordinator Behavior After Compaction","score":0.8645833333333333,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.148Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":7}
+{"timestamp":"2025-12-25T16:38:02.276Z","eval_name":"Example: Basic scorer test","score":1,"run_count":38}
+{"timestamp":"2025-12-25T16:38:02.428Z","eval_name":"Example: Basic scorer test","score":1,"run_count":39}
+{"timestamp":"2025-12-25T16:38:02.547Z","eval_name":"Example: Basic scorer test","score":1,"run_count":40}
+{"timestamp":"2025-12-25T16:38:02.782Z","eval_name":"Example: Basic scorer test","score":1,"run_count":41}
+{"timestamp":"2025-12-25T16:38:02.933Z","eval_name":"Example: Basic scorer test","score":1,"run_count":42}
+{"timestamp":"2025-12-25T16:38:03.050Z","eval_name":"Example: Basic scorer test","score":1,"run_count":43}
+{"timestamp":"2025-12-25T16:38:03.165Z","eval_name":"Example: Basic scorer test","score":1,"run_count":44}
+{"timestamp":"2025-12-25T16:38:52.756Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Swarm Decomposition Quality","score":0.695,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"No False Positives","score":1,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Example: Basic scorer test","score":1,"run_count":45}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Placeholder Detection","score":0,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Generic Instructions Fail","score":0,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"First Tool Discipline","score":0,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.757Z","eval_name":"Coordinator Behavior After Compaction","score":0.9526041666666667,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.758Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":8}
+{"timestamp":"2025-12-25T16:38:52.903Z","eval_name":"Example: Basic scorer test","score":1,"run_count":46}
+{"timestamp":"2025-12-25T16:38:53.020Z","eval_name":"Example: Basic scorer test","score":1,"run_count":47}
+{"timestamp":"2025-12-25T16:38:53.136Z","eval_name":"Example: Basic scorer test","score":1,"run_count":48}
+{"timestamp":"2025-12-25T16:38:53.367Z","eval_name":"Example: Basic scorer test","score":1,"run_count":49}
+{"timestamp":"2025-12-25T16:38:53.511Z","eval_name":"Example: Basic scorer test","score":1,"run_count":50}
+{"timestamp":"2025-12-25T16:38:53.624Z","eval_name":"Example: Basic scorer test","score":1,"run_count":51}
+{"timestamp":"2025-12-25T16:38:53.737Z","eval_name":"Example: Basic scorer test","score":1,"run_count":52}
+{"timestamp":"2025-12-25T16:40:39.219Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.219Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.219Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.219Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Swarm Decomposition Quality","score":0.7020833333333334,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"No False Positives","score":1,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Example: Basic scorer test","score":1,"run_count":53}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Coordinator Behavior After Compaction","score":0.7291666666666666,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Placeholder Detection","score":0,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"Generic Instructions Fail","score":0,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.220Z","eval_name":"First Tool Discipline","score":0,"run_count":9}
+{"timestamp":"2025-12-25T16:40:39.352Z","eval_name":"Example: Basic scorer test","score":1,"run_count":54}
+{"timestamp":"2025-12-25T16:40:39.460Z","eval_name":"Example: Basic scorer test","score":1,"run_count":55}
+{"timestamp":"2025-12-25T16:40:39.572Z","eval_name":"Example: Basic scorer test","score":1,"run_count":56}
+{"timestamp":"2025-12-25T16:40:39.816Z","eval_name":"Example: Basic scorer test","score":1,"run_count":57}
+{"timestamp":"2025-12-25T16:40:39.947Z","eval_name":"Example: Basic scorer test","score":1,"run_count":58}
+{"timestamp":"2025-12-25T16:40:40.084Z","eval_name":"Example: Basic scorer test","score":1,"run_count":59}
+{"timestamp":"2025-12-25T16:40:40.202Z","eval_name":"Example: Basic scorer test","score":1,"run_count":60}
+{"timestamp":"2025-12-25T16:43:12.851Z","eval_name":"Example: Basic scorer test","score":1,"run_count":61}
+{"timestamp":"2025-12-25T16:43:43.041Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.041Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.041Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Swarm Decomposition Quality","score":0.6909722222222222,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"No False Positives","score":1,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Example: Basic scorer test","score":1,"run_count":62}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Placeholder Detection","score":0,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Generic Instructions Fail","score":0,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"First Tool Discipline","score":0,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.042Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":10}
+{"timestamp":"2025-12-25T16:43:43.043Z","eval_name":"Coordinator Behavior After Compaction","score":1,"run_count":10}
+{"timestamp":"2025-12-25T16:44:12.471Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.471Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.471Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.471Z","eval_name":"Swarm Decomposition Quality","score":0.6720833333333333,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.471Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.471Z","eval_name":"Example: Basic scorer test","score":1,"run_count":63}
+{"timestamp":"2025-12-25T16:44:12.471Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"No False Positives","score":1,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"Coordinator Behavior After Compaction","score":0.9796875,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"Coordinator Resists Direct Implementation","score":1,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"Placeholder Detection","score":0,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"Generic Instructions Fail","score":0,"run_count":11}
+{"timestamp":"2025-12-25T16:44:12.472Z","eval_name":"First Tool Discipline","score":0,"run_count":11}
+{"timestamp":"2025-12-25T16:49:55.548Z","eval_name":"Coordinator Discipline - Synthetic Fixtures","score":0.6354444444444443,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.549Z","eval_name":"Coordinator Discipline - Real Sessions","score":0,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.555Z","eval_name":"Coordinator Discipline - Perfect vs Bad","score":0.5416666666666666,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.555Z","eval_name":"Decomposition Edge Cases","score":0.775,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.555Z","eval_name":"Swarm Decomposition Quality","score":0.7001388888888888,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.555Z","eval_name":"Compaction Hook Coordinator Resumption","score":0.95,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.556Z","eval_name":"Epic ID Specificity","score":0.5,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.557Z","eval_name":"No False Positives","score":1,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.557Z","eval_name":"Example: Basic scorer test","score":1,"run_count":64}
+{"timestamp":"2025-12-25T16:49:55.557Z","eval_name":"Generic Instructions Fail","score":0,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.557Z","eval_name":"First Tool Discipline","score":0,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.561Z","eval_name":"Compaction Prompt Quality","score":0.6342857142857142,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.561Z","eval_name":"Perfect Prompt Scores 100%","score":1,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.561Z","eval_name":"Placeholder Detection","score":0,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.561Z","eval_name":"Coordinator Behavior After Compaction","score":1,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.565Z","eval_name":"Coordinator Resists Direct Implementation","score":0.9375,"run_count":12}
+{"timestamp":"2025-12-25T16:49:55.697Z","eval_name":"Example: Basic scorer test","score":1,"run_count":65}
+{"timestamp":"2025-12-25T16:49:55.813Z","eval_name":"Example: Basic scorer test","score":1,"run_count":66}
+{"timestamp":"2025-12-25T16:49:55.934Z","eval_name":"Example: Basic scorer test","score":1,"run_count":67}
+{"timestamp":"2025-12-25T16:49:56.178Z","eval_name":"Example: Basic scorer test","score":1,"run_count":68}
+{"timestamp":"2025-12-25T16:49:56.327Z","eval_name":"Example: Basic scorer test","score":1,"run_count":69}
+{"timestamp":"2025-12-25T16:49:56.446Z","eval_name":"Example: Basic scorer test","score":1,"run_count":70}
+{"timestamp":"2025-12-25T16:49:56.556Z","eval_name":"Example: Basic scorer test","score":1,"run_count":71}

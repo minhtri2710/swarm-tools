@@ -9,6 +9,7 @@ describe("Memory Schema", () => {
     const libsqlClient = createClient({ url: ":memory:" });
 
     // Create the table using Drizzle schema
+    // IMPORTANT: Must match db/schema/memory.ts Drizzle schema exactly
     await libsqlClient.execute(`
       CREATE TABLE memories (
         id TEXT PRIMARY KEY,
@@ -19,7 +20,12 @@ describe("Memory Schema", () => {
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         decay_factor REAL DEFAULT 1.0,
-        embedding F32_BLOB(1024)
+        embedding F32_BLOB(1024),
+        valid_from TEXT,
+        valid_until TEXT,
+        superseded_by TEXT REFERENCES memories(id),
+        auto_tags TEXT,
+        keywords TEXT
       )
     `);
 
@@ -34,7 +40,7 @@ describe("Memory Schema", () => {
       SELECT name, type, "notnull", dflt_value FROM pragma_table_info('memories')
     `);
 
-    expect(columns.rows).toHaveLength(9);
+    expect(columns.rows).toHaveLength(14); // 9 original + 5 new columns
 
     // Check each column
     const columnMap = new Map(
@@ -83,6 +89,7 @@ describe("Memory Schema", () => {
     const db = createDrizzleClient(libsqlClient);
 
     // Create table
+    // IMPORTANT: Must match db/schema/memory.ts Drizzle schema exactly
     await libsqlClient.execute(`
       CREATE TABLE memories (
         id TEXT PRIMARY KEY,
@@ -93,7 +100,12 @@ describe("Memory Schema", () => {
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         decay_factor REAL DEFAULT 1.0,
-        embedding F32_BLOB(1024)
+        embedding F32_BLOB(1024),
+        valid_from TEXT,
+        valid_until TEXT,
+        superseded_by TEXT REFERENCES memories(id),
+        auto_tags TEXT,
+        keywords TEXT
       )
     `);
 
@@ -125,6 +137,7 @@ describe("Memory Schema", () => {
     const db = createDrizzleClient(libsqlClient);
 
     // Create table with vector column
+    // IMPORTANT: Must match db/schema/memory.ts Drizzle schema exactly
     await libsqlClient.execute(`
       CREATE TABLE memories (
         id TEXT PRIMARY KEY,
@@ -135,7 +148,12 @@ describe("Memory Schema", () => {
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         decay_factor REAL DEFAULT 1.0,
-        embedding F32_BLOB(1024)
+        embedding F32_BLOB(1024),
+        valid_from TEXT,
+        valid_until TEXT,
+        superseded_by TEXT REFERENCES memories(id),
+        auto_tags TEXT,
+        keywords TEXT
       )
     `);
 

@@ -13,6 +13,10 @@ import { createInMemoryStorage } from "evalite/in-memory-storage";
 import type { Evalite } from "evalite/types";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { recordEvalRun, getScoreHistory } from "./eval-history.js";
+import { checkGate } from "./eval-gates.js";
+import { learnFromEvalFailure } from "./eval-learning.js";
+import { getMemoryAdapter } from "./memory-tools.js";
 
 /**
  * Options for running evals programmatically
@@ -97,6 +101,17 @@ export interface RunEvalsResult {
   
   /** Error message if run failed */
   error?: string;
+  
+  /** Gate check results per suite */
+  gateResults?: Array<{
+    suite: string;
+    passed: boolean;
+    phase: string;
+    message: string;
+    baseline?: number;
+    currentScore: number;
+    regressionPercent?: number;
+  }>;
 }
 
 /**
@@ -246,6 +261,36 @@ export async function runEvals(
       })),
     }));
 
+    // Record eval runs to history
+    for (const suite of suites) {
+      const history = getScoreHistory(projectRoot, suite.name);
+      recordEvalRun(projectRoot, {
+        timestamp: new Date().toISOString(),
+        eval_name: suite.name,
+        score: suite.averageScore,
+        run_count: history.length + 1,
+      });
+    }
+
+    // Check gates for each suite
+    const gateResults = [];
+    for (const suite of suites) {
+      const history = getScoreHistory(projectRoot, suite.name);
+      const gate = checkGate(projectRoot, suite.name, suite.averageScore);
+      gateResults.push({ suite: suite.name, ...gate });
+      
+      // If gate failed, trigger learning
+      if (!gate.passed) {
+        try {
+          const memoryAdapter = await getMemoryAdapter();
+          await learnFromEvalFailure(suite.name, suite.averageScore, history, memoryAdapter);
+        } catch (e) {
+          // Learning is best-effort, don't fail the eval run
+          console.warn(`Failed to store learning for ${suite.name}:`, e);
+        }
+      }
+    }
+
     // Calculate overall metrics
     const totalEvals = suites.reduce((sum, s) => sum + s.evalCount, 0);
     const averageScore =
@@ -263,6 +308,7 @@ export async function runEvals(
       totalEvals,
       averageScore,
       suites,
+      gateResults,
     };
   } catch (error) {
     // Return error result

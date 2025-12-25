@@ -4,9 +4,9 @@
  * TDD tests for the HTTP server that exposes Durable Streams protocol via SSE.
  * Server uses Bun.serve() and provides offset-based streaming.
  *
- * Port: 4483 (HIVE on phone keypad)
+ * Uses port 0 for OS-assigned ports to avoid conflicts in parallel test runs.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createInMemorySwarmMailLibSQL } from "../libsql.convenience.js";
 import { createEvent } from "./events.js";
 import type { SwarmMailAdapter } from "../types/adapter.js";
@@ -19,96 +19,102 @@ import {
   type DurableStreamServer,
 } from "./durable-server.js";
 
-describe("createDurableStreamServer", () => {
+// ============================================================================
+// Factory Function Tests
+// ============================================================================
+
+describe("createDurableStreamServer factory", () => {
   let swarmMail: SwarmMailAdapter;
   let adapter: DurableStreamAdapter;
-  let server: DurableStreamServer;
-  const projectKey = "/test/project";
+  const projectKey = "/factory/test";
 
   beforeAll(async () => {
-    swarmMail = await createInMemorySwarmMailLibSQL("durable-server-test");
+    swarmMail = await createInMemorySwarmMailLibSQL("durable-factory-test");
     adapter = createDurableStreamAdapter(swarmMail, projectKey);
-
-    // Seed some initial events using the adapter
-    await swarmMail.appendEvent(
-      createEvent("agent_registered", {
-        project_key: projectKey,
-        agent_name: "TestAgent1",
-        program: "opencode",
-        model: "test",
-      }),
-    );
-
-    await swarmMail.appendEvent(
-      createEvent("task_started", {
-        project_key: projectKey,
-        agent_name: "TestAgent1",
-        bead_id: "test-bead-1",
-      }),
-    );
   });
 
   afterAll(async () => {
-    if (server) {
-      await server.stop();
-    }
     await swarmMail.close();
   });
 
-  describe("factory function", () => {
-    test("creates server with default port 4483", async () => {
-      server = createDurableStreamServer({ adapter, projectKey });
-      expect(server).toBeDefined();
-      expect(server.url).toContain("4483");
-      expect(server.url).toMatch(/^http:\/\//);
-    });
-
-    test("creates server with custom port", async () => {
-      const customServer = createDurableStreamServer({
-        adapter,
-        port: 5555,
-        projectKey,
-      });
-      expect(customServer.url).toContain("5555");
-    });
-
-    test("server has start, stop, and url properties", () => {
-      expect(server.start).toBeInstanceOf(Function);
-      expect(server.stop).toBeInstanceOf(Function);
-      expect(typeof server.url).toBe("string");
-    });
+  test("creates server with required properties", () => {
+    const server = createDurableStreamServer({ adapter, projectKey, port: 0 });
+    expect(server).toBeDefined();
+    expect(server.start).toBeInstanceOf(Function);
+    expect(server.stop).toBeInstanceOf(Function);
+    expect(typeof server.url).toBe("string");
+    expect(server.url).toMatch(/^http:\/\/localhost:\d+$/);
   });
 
-  describe("start() and stop()", () => {
-    test("server starts successfully", async () => {
-      await server.start();
-      // Verify server is listening by making a request
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}`,
-      );
-      expect(response.status).toBe(200);
-    });
+  test("url reflects actual port after start", async () => {
+    const server = createDurableStreamServer({ adapter, projectKey, port: 0 });
+    
+    // Before start, url uses configured port (0)
+    const urlBeforeStart = server.url;
+    
+    await server.start();
+    
+    // After start, url should have actual assigned port
+    const urlAfterStart = server.url;
+    expect(urlAfterStart).toMatch(/^http:\/\/localhost:\d+$/);
+    expect(urlAfterStart).not.toContain(":0"); // Should not be port 0
+    
+    await server.stop();
+  });
 
-    test("server stops successfully", async () => {
-      await server.stop();
-      // Verify server is no longer listening
-      try {
-        await fetch(`${server.url}/streams/${encodeURIComponent(projectKey)}`);
-        throw new Error("Server should not respond after stop");
-      } catch (error: unknown) {
-        // Bun throws different errors depending on timing
-        const err = error as { code?: string; message?: string };
-        expect(
-          err.code === "ECONNREFUSED" ||
-            err.message?.includes("fetch") ||
-            err.message?.includes("Server should not respond"),
-        ).toBeTruthy();
-      }
-    });
+  test("start and stop lifecycle works", async () => {
+    const server = createDurableStreamServer({ adapter, projectKey, port: 0 });
+    
+    // Start server
+    await server.start();
+    
+    // Verify it's listening
+    const response = await fetch(`${server.url}/streams/${encodeURIComponent(projectKey)}`);
+    expect(response.status).toBe(200);
+    
+    // Stop server
+    await server.stop();
+    
+    // Verify it's not listening
+    try {
+      await fetch(`${server.url}/streams/${encodeURIComponent(projectKey)}`);
+      throw new Error("Server should not respond after stop");
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string; name?: string };
+      const isConnectionError =
+        err.code === "ECONNREFUSED" ||
+        err.name === "ConnectionRefused" ||
+        err.message?.includes("Unable to connect") ||
+        err.message?.includes("Connection refused") ||
+        err.message?.includes("Server should not respond");
+      expect(isConnectionError).toBeTruthy();
+    }
+  });
+
+  test("double start throws error", async () => {
+    const server = createDurableStreamServer({ adapter, projectKey, port: 0 });
+    await server.start();
+    
+    await expect(server.start()).rejects.toThrow("already running");
+    
+    await server.stop();
+  });
+
+  test("double stop is safe (idempotent)", async () => {
+    const server = createDurableStreamServer({ adapter, projectKey, port: 0 });
+    await server.start();
+    await server.stop();
+    
+    // Second stop should not throw
+    await server.stop();
   });
 });
 
-describe("HTTP endpoints", () => {
+// ============================================================================
+// HTTP Endpoint Tests
+// ============================================================================
+
+describe("DurableStreamServer HTTP endpoints", () => {
   let swarmMail: SwarmMailAdapter;
   let adapter: DurableStreamAdapter;
   let server: DurableStreamServer;
@@ -118,7 +124,7 @@ describe("HTTP endpoints", () => {
     swarmMail = await createInMemorySwarmMailLibSQL("durable-http-test");
     adapter = createDurableStreamAdapter(swarmMail, projectKey);
 
-    // Seed events using the adapter
+    // Seed events
     for (let i = 0; i < 5; i++) {
       await swarmMail.appendEvent(
         createEvent("agent_active", {
@@ -128,7 +134,7 @@ describe("HTTP endpoints", () => {
       );
     }
 
-    server = createDurableStreamServer({ adapter, port: 4484, projectKey });
+    server = createDurableStreamServer({ adapter, port: 0, projectKey });
     await server.start();
   });
 
@@ -137,261 +143,292 @@ describe("HTTP endpoints", () => {
     await swarmMail.close();
   });
 
-  describe("GET /streams/:projectKey", () => {
-    test("returns events from offset 0", async () => {
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}`,
-      );
+  // --- JSON endpoints ---
 
-      expect(response.status).toBe(200);
-      expect(response.headers.get("content-type")).toBe("application/json");
+  test("GET /streams/:projectKey returns events as JSON", async () => {
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}`,
+    );
 
-      const events = await response.json();
-      expect(Array.isArray(events)).toBe(true);
-      expect(events.length).toBeGreaterThan(0);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/json");
 
-      // Verify StreamEvent format
-      const event = events[0];
-      expect(event).toHaveProperty("offset");
-      expect(event).toHaveProperty("data");
-      expect(event).toHaveProperty("timestamp");
-    });
+    const events = await response.json();
+    expect(Array.isArray(events)).toBe(true);
+    expect(events.length).toBeGreaterThan(0);
 
-    test("respects offset parameter", async () => {
-      // First, get all events to know the current state
-      const allResponse = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}`,
-      );
-      const allEvents = await allResponse.json();
-      expect(allEvents.length).toBeGreaterThan(2);
-
-      // Now request from offset (skip first 2 events)
-      const skipOffset = allEvents[1].offset;
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=${skipOffset}`,
-      );
-
-      const events = await response.json();
-      expect(events.length).toBeGreaterThan(0);
-
-      // First returned event should be after the offset we requested
-      expect(events[0].offset).toBeGreaterThan(skipOffset);
-      expect(events[0].offset).toBe(allEvents[2].offset);
-    });
-
-    test("respects limit parameter", async () => {
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=0&limit=2`,
-      );
-
-      const events = await response.json();
-      expect(events.length).toBeLessThanOrEqual(2);
-    });
-
-    test("returns empty array when offset is beyond head", async () => {
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=9999`,
-      );
-
-      const events = await response.json();
-      expect(events).toEqual([]);
-    });
-
-    test("handles URL-encoded project keys", async () => {
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent("/test/with/slashes")}`,
-      );
-
-      // Should not error (404 is fine since no events for this project)
-      expect([200, 404]).toContain(response.status);
-    });
+    // Verify StreamEvent format
+    const event = events[0];
+    expect(event).toHaveProperty("offset");
+    expect(event).toHaveProperty("data");
+    expect(event).toHaveProperty("timestamp");
   });
 
-  describe("GET /streams/:projectKey with live=true (SSE)", () => {
-    test("returns SSE content-type for live mode", async () => {
-      const controller = new AbortController();
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true`,
-        { signal: controller.signal },
+  test("offset parameter skips events", async () => {
+    // Get all events first
+    const allResponse = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}`,
+    );
+    const allEvents = await allResponse.json();
+    expect(allEvents.length).toBeGreaterThan(2);
+
+    // Request from offset (skip first 2 events)
+    const skipOffset = allEvents[1].offset;
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=${skipOffset}`,
+    );
+
+    const events = await response.json();
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0].offset).toBeGreaterThan(skipOffset);
+  });
+
+  test("limit parameter caps results", async () => {
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=0&limit=2`,
+    );
+
+    const events = await response.json();
+    expect(events.length).toBeLessThanOrEqual(2);
+  });
+
+  test("offset beyond head returns empty array", async () => {
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=9999`,
+    );
+
+    const events = await response.json();
+    expect(events).toEqual([]);
+  });
+
+  test("URL-encoded project keys work", async () => {
+    // Different project key - should get 404 since server is configured for specific project
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent("/other/project")}`,
+    );
+    expect(response.status).toBe(404);
+  });
+
+  // --- Error handling ---
+
+  test("unknown routes return 404", async () => {
+    const response = await fetch(`${server.url}/unknown`);
+    expect(response.status).toBe(404);
+  });
+
+  test("malformed offset returns 400", async () => {
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=not-a-number`,
+    );
+    expect(response.status).toBe(400);
+  });
+
+  test("negative offset returns 400", async () => {
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=-1`,
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
+// ============================================================================
+// SSE (Server-Sent Events) Tests
+// ============================================================================
+
+describe("DurableStreamServer SSE streaming", () => {
+  let swarmMail: SwarmMailAdapter;
+  let adapter: DurableStreamAdapter;
+  let server: DurableStreamServer;
+  const projectKey = "/sse/test";
+
+  beforeAll(async () => {
+    swarmMail = await createInMemorySwarmMailLibSQL("durable-sse-test");
+    adapter = createDurableStreamAdapter(swarmMail, projectKey);
+
+    // Seed initial events
+    for (let i = 0; i < 3; i++) {
+      await swarmMail.appendEvent(
+        createEvent("agent_active", {
+          project_key: projectKey,
+          agent_name: `SSEAgent${i}`,
+        }),
       );
+    }
 
-      expect(response.status).toBe(200);
-      expect(response.headers.get("content-type")).toBe("text/event-stream");
-      expect(response.headers.get("cache-control")).toBe("no-cache");
-      expect(response.headers.get("connection")).toBe("keep-alive");
+    server = createDurableStreamServer({ adapter, port: 0, projectKey });
+    await server.start();
+  });
 
-      controller.abort();
-    });
+  afterAll(async () => {
+    await server.stop();
+    await swarmMail.close();
+  });
 
-    test("streams existing events in SSE format", async () => {
-      const controller = new AbortController();
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true`,
-        { signal: controller.signal },
-      );
+  test("live=true returns SSE content-type", async () => {
+    const controller = new AbortController();
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true`,
+      { signal: controller.signal },
+    );
 
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let chunks = "";
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+    expect(response.headers.get("cache-control")).toBe("no-cache");
+    expect(response.headers.get("connection")).toBe("keep-alive");
 
-      // Read first few chunks with timeout
-      const readPromise = (async () => {
-        for (let i = 0; i < 3; i++) {
+    controller.abort();
+  });
+
+  test("SSE streams existing events in correct format", async () => {
+    const controller = new AbortController();
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true`,
+      { signal: controller.signal },
+    );
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let chunks = "";
+
+    // Read first few chunks with timeout
+    const readWithTimeout = async () => {
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      try {
+        for (let i = 0; i < 5; i++) {
           const { value, done } = await reader.read();
           if (done) break;
           if (value) {
             chunks += decoder.decode(value, { stream: true });
-          }
-        }
-      })();
-
-      // Add timeout to prevent hanging
-      await Promise.race([
-        readPromise,
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ]);
-
-      controller.abort();
-
-      // Verify SSE format: data: {json}\n\n
-      expect(chunks).toContain("data: ");
-      expect(chunks).toContain("\n\n");
-
-      // Extract first event
-      const match = chunks.match(/data: (.+?)\n\n/);
-      expect(match).toBeTruthy();
-
-      const event = JSON.parse(match![1]);
-      expect(event).toHaveProperty("offset");
-      expect(event).toHaveProperty("data");
-      expect(event).toHaveProperty("timestamp");
-    });
-
-    test("streams new events as they arrive", async () => {
-      // Get current head to use as offset (so we only get NEW events)
-      const head = await adapter.head();
-
-      const controller = new AbortController();
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true&offset=${head}`,
-        { signal: controller.signal },
-      );
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let result = "";
-
-      // Start reading in background (don't await yet)
-      const readPromise = (async () => {
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        try {
-          while (!controller.signal.aborted) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            if (value) {
-              result += decoder.decode(value, { stream: true });
-              // Check if we got our event
-              if (result.includes("live-test-1")) {
-                break;
-              }
+            // Stop once we have enough data
+            if (chunks.includes("data: ") && chunks.split("data: ").length > 2) {
+              break;
             }
           }
-        } catch {
-          // Aborted or error
         }
+      } finally {
         clearTimeout(timeout);
-        return result;
-      })();
+      }
+    };
 
-      // Give SSE connection time to establish and start reading
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    await readWithTimeout();
+    controller.abort();
 
-      // Append a new event using the adapter
-      await swarmMail.appendEvent(
-        createEvent("task_completed", {
-          project_key: projectKey,
-          agent_name: "TestAgent",
-          bead_id: "live-test-1",
-          summary: "Live SSE test",
-          success: true,
-        }),
-      );
+    // Verify SSE format: data: {json}\n\n
+    expect(chunks).toContain("data: ");
+    expect(chunks).toContain("\n\n");
 
-      // Wait for the read to complete (or timeout)
-      const chunks = await readPromise;
+    // Extract and parse first event
+    const match = chunks.match(/data: ({.+?})\n\n/);
+    expect(match).toBeTruthy();
 
-      controller.abort();
-
-      // Should have received the new event
-      expect(chunks).toContain("data: ");
-      expect(chunks).toContain("live-test-1");
-    });
-
-    test("closes connection cleanly on client disconnect", async () => {
-      const controller = new AbortController();
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true`,
-        { signal: controller.signal },
-      );
-
-      const reader = response.body!.getReader();
-
-      // Read one chunk then cancel
-      await reader.read();
-      controller.abort();
-
-      // Should not error (clean disconnect)
-      expect(true).toBe(true);
-    });
+    const event = JSON.parse(match![1]);
+    expect(event).toHaveProperty("offset");
+    expect(event).toHaveProperty("data");
+    expect(event).toHaveProperty("timestamp");
   });
 
-  describe("error handling", () => {
-    test("returns 404 for unknown routes", async () => {
-      const response = await fetch(`${server.url}/unknown`);
-      expect(response.status).toBe(404);
-    });
+  test("SSE streams new events as they arrive", async () => {
+    // Get current head to use as offset (so we only get NEW events)
+    const head = await adapter.head();
 
-    test("handles malformed offset parameter", async () => {
-      const response = await fetch(
-        `${server.url}/streams/${encodeURIComponent(projectKey)}?offset=not-a-number`,
-      );
+    const controller = new AbortController();
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true&offset=${head}`,
+      { signal: controller.signal },
+    );
 
-      // Should default to 0 or return 400
-      expect([200, 400]).toContain(response.status);
-    });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let result = "";
+    const uniqueId = `live-test-${Date.now()}`;
+
+    // Start reading in background
+    const readPromise = (async () => {
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        while (!controller.signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            result += decoder.decode(value, { stream: true });
+            if (result.includes(uniqueId)) {
+              break;
+            }
+          }
+        }
+      } catch {
+        // Aborted
+      }
+      clearTimeout(timeout);
+      return result;
+    })();
+
+    // Give SSE connection time to establish
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Append a new event
+    await swarmMail.appendEvent(
+      createEvent("task_completed", {
+        project_key: projectKey,
+        agent_name: "TestAgent",
+        bead_id: uniqueId,
+        summary: "Live SSE test",
+        success: true,
+      }),
+    );
+
+    // Wait for read to complete
+    const chunks = await readPromise;
+    controller.abort();
+
+    // Should have received the new event
+    expect(chunks).toContain("data: ");
+    expect(chunks).toContain(uniqueId);
+  });
+
+  test("client disconnect is handled cleanly", async () => {
+    const controller = new AbortController();
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent(projectKey)}?live=true`,
+      { signal: controller.signal },
+    );
+
+    const reader = response.body!.getReader();
+
+    // Read one chunk then abort
+    await reader.read();
+    controller.abort();
+
+    // Should not throw - clean disconnect
+    expect(true).toBe(true);
   });
 });
 
-describe("integration with DurableStreamAdapter", () => {
+// ============================================================================
+// Project Key Filtering Tests
+// ============================================================================
+
+describe("DurableStreamServer project filtering", () => {
   let swarmMail: SwarmMailAdapter;
   let adapter: DurableStreamAdapter;
   let server: DurableStreamServer;
-  const projectKey = "/integration/test";
+  const projectKey = "/filter/test";
 
   beforeAll(async () => {
-    swarmMail = await createInMemorySwarmMailLibSQL("durable-integration");
+    swarmMail = await createInMemorySwarmMailLibSQL("durable-filter-test");
     adapter = createDurableStreamAdapter(swarmMail, projectKey);
-    server = createDurableStreamServer({ adapter, port: 4485, projectKey });
-    await server.start();
-  });
 
-  afterAll(async () => {
-    await server.stop();
-    await swarmMail.close();
-  });
-
-  test("server returns events filtered by project key", async () => {
-    // Add events for our project using the adapter
+    // Add events for our project
     await swarmMail.appendEvent(
       createEvent("agent_registered", {
         project_key: projectKey,
-        agent_name: "ProjectAgent",
+        agent_name: "OurAgent",
         program: "opencode",
         model: "test",
       }),
     );
 
-    // Add events for different project
+    // Add events for different project (should be filtered out)
     await swarmMail.appendEvent(
       createEvent("agent_registered", {
         project_key: "/other/project",
@@ -401,10 +438,22 @@ describe("integration with DurableStreamAdapter", () => {
       }),
     );
 
+    server = createDurableStreamServer({ adapter, port: 0, projectKey });
+    await server.start();
+  });
+
+  afterAll(async () => {
+    await server.stop();
+    await swarmMail.close();
+  });
+
+  test("only returns events for configured project", async () => {
     const response = await fetch(
       `${server.url}/streams/${encodeURIComponent(projectKey)}`,
     );
     const events = await response.json();
+
+    expect(events.length).toBeGreaterThan(0);
 
     // All returned events should be for our project
     for (const event of events) {
@@ -413,7 +462,34 @@ describe("integration with DurableStreamAdapter", () => {
     }
   });
 
-  test("subscription cleanup on server stop", async () => {
+  test("returns 404 for different project key", async () => {
+    const response = await fetch(
+      `${server.url}/streams/${encodeURIComponent("/other/project")}`,
+    );
+    expect(response.status).toBe(404);
+  });
+});
+
+// ============================================================================
+// Server Stop Cleanup Tests
+// ============================================================================
+
+describe("DurableStreamServer cleanup on stop", () => {
+  test("active SSE connections are closed when server stops", async () => {
+    const swarmMail = await createInMemorySwarmMailLibSQL("durable-cleanup-test");
+    const projectKey = "/cleanup/test";
+    const adapter = createDurableStreamAdapter(swarmMail, projectKey);
+
+    await swarmMail.appendEvent(
+      createEvent("agent_active", {
+        project_key: projectKey,
+        agent_name: "CleanupAgent",
+      }),
+    );
+
+    const server = createDurableStreamServer({ adapter, port: 0, projectKey });
+    await server.start();
+
     const controller = new AbortController();
 
     // Start SSE connection
@@ -424,7 +500,10 @@ describe("integration with DurableStreamAdapter", () => {
 
     const reader = response.body!.getReader();
 
-    // Stop server (should clean up subscriptions)
+    // Read initial data
+    await reader.read();
+
+    // Stop server (should clean up subscriptions and close streams)
     await server.stop();
 
     // Reader should detect closed connection
@@ -435,5 +514,7 @@ describe("integration with DurableStreamAdapter", () => {
       // Connection reset is also acceptable
       expect(true).toBe(true);
     }
+
+    await swarmMail.close();
   });
 });

@@ -27,6 +27,9 @@ import {
 	type StatsResult,
 	type HealthResult,
 	type OperationResult,
+	type UpsertArgs,
+	type UpsertResult,
+	type AutoTags,
 } from "./memory";
 
 // Re-export types for external use
@@ -41,7 +44,10 @@ export type {
 	StatsResult,
 	HealthResult,
 	OperationResult,
-};
+	UpsertArgs,
+	UpsertResult,
+	AutoTags,
+} from "./memory";
 
 // ============================================================================
 // Types
@@ -65,7 +71,7 @@ let cachedProjectPath: string | null = null;
  * @param projectPath - Project path (uses CWD if not provided)
  * @returns Memory adapter instance
  */
-async function getMemoryAdapter(
+export async function getMemoryAdapter(
 	projectPath?: string,
 ): Promise<MemoryAdapter> {
 	const path = projectPath || process.cwd();
@@ -106,7 +112,7 @@ export { createMemoryAdapter };
  */
 export const semantic_memory_store = tool({
 	description:
-		"Store a memory with semantic embedding. Memories are searchable by semantic similarity and can be organized into collections. Confidence affects decay rate: high confidence (1.0) = 135 day half-life, low confidence (0.0) = 45 day half-life.",
+		"Store a memory with semantic embedding. Memories are searchable by semantic similarity and can be organized into collections. Confidence affects decay rate: high confidence (1.0) = 135 day half-life, low confidence (0.0) = 45 day half-life. Supports auto-tagging, auto-linking, and entity extraction via LLM.",
 	args: {
 		information: tool.schema
 			.string()
@@ -127,6 +133,18 @@ export const semantic_memory_store = tool({
 			.number()
 			.optional()
 			.describe("Confidence level (0.0-1.0) affecting decay rate. Higher = slower decay. Default 0.7"),
+		autoTag: tool.schema
+			.boolean()
+			.optional()
+			.describe("Auto-generate tags using LLM. Default false"),
+		autoLink: tool.schema
+			.boolean()
+			.optional()
+			.describe("Auto-link to related memories. Default false"),
+		extractEntities: tool.schema
+			.boolean()
+			.optional()
+			.describe("Extract entities (people, places, technologies). Default false"),
 	},
 	async execute(args, ctx: ToolContext) {
 		const adapter = await getMemoryAdapter();
@@ -258,6 +276,52 @@ export const semantic_memory_check = tool({
 	},
 });
 
+/**
+ * Smart upsert - ADD, UPDATE, DELETE, or NOOP based on existing memories
+ */
+export const semantic_memory_upsert = tool({
+	description:
+		"Smart memory storage that decides whether to ADD, UPDATE, DELETE, or skip (NOOP) based on existing memories. Uses LLM to detect duplicates, refinements, and contradictions. Auto-generates tags, links, and entities when enabled.",
+	args: {
+		information: tool.schema
+			.string()
+			.describe("The information to store (required)"),
+		collection: tool.schema
+			.string()
+			.optional()
+			.describe("Collection name (defaults to 'default')"),
+		tags: tool.schema
+			.string()
+			.optional()
+			.describe("Comma-separated tags (e.g., 'auth,tokens,oauth')"),
+		metadata: tool.schema
+			.string()
+			.optional()
+			.describe("JSON string with additional metadata"),
+		confidence: tool.schema
+			.number()
+			.optional()
+			.describe("Confidence level (0.0-1.0) affecting decay rate. Higher = slower decay. Default 0.7"),
+		autoTag: tool.schema
+			.boolean()
+			.optional()
+			.describe("Auto-generate tags using LLM. Default true"),
+		autoLink: tool.schema
+			.boolean()
+			.optional()
+			.describe("Auto-link to related memories. Default true"),
+		extractEntities: tool.schema
+			.boolean()
+			.optional()
+			.describe("Extract entities (people, places, technologies). Default false"),
+	},
+	async execute(args, ctx: ToolContext) {
+		const adapter = await getMemoryAdapter();
+		const result = await adapter.upsert(args);
+		return JSON.stringify(result, null, 2);
+	},
+});
+
 // ============================================================================
 // Tool Registry
 // ============================================================================
@@ -276,4 +340,5 @@ export const memoryTools = {
 	"semantic-memory_list": semantic_memory_list,
 	"semantic-memory_stats": semantic_memory_stats,
 	"semantic-memory_check": semantic_memory_check,
+	"semantic-memory_upsert": semantic_memory_upsert,
 } as const;

@@ -29,6 +29,7 @@ describe("Memory Store (Drizzle) - Basic Operations", () => {
     const client = createClient({ url: ":memory:" });
 
     // Create memories table with vector column
+    // IMPORTANT: Must match db/schema/memory.ts Drizzle schema exactly
     await client.execute(`
       CREATE TABLE memories (
         id TEXT PRIMARY KEY,
@@ -39,7 +40,12 @@ describe("Memory Store (Drizzle) - Basic Operations", () => {
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         decay_factor REAL DEFAULT 1.0,
-        embedding F32_BLOB(1024)
+        embedding F32_BLOB(1024),
+        valid_from TEXT,
+        valid_until TEXT,
+        superseded_by TEXT REFERENCES memories(id),
+        auto_tags TEXT,
+        keywords TEXT
       )
     `);
 
@@ -223,6 +229,7 @@ describe("Memory Store (Drizzle) - Vector Search", () => {
     const client = createClient({ url: ":memory:" });
 
     // Create memories table with vector column
+    // IMPORTANT: Must match db/schema/memory.ts Drizzle schema exactly
     await client.execute(`
       CREATE TABLE memories (
         id TEXT PRIMARY KEY,
@@ -233,7 +240,12 @@ describe("Memory Store (Drizzle) - Vector Search", () => {
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         decay_factor REAL DEFAULT 1.0,
-        embedding F32_BLOB(1024)
+        embedding F32_BLOB(1024),
+        valid_from TEXT,
+        valid_until TEXT,
+        superseded_by TEXT REFERENCES memories(id),
+        auto_tags TEXT,
+        keywords TEXT
       )
     `);
 

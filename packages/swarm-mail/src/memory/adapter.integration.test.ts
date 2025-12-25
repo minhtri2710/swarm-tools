@@ -26,6 +26,7 @@ async function createTestDb(): Promise<{ client: Client; db: SwarmDb }> {
   const client = createClient({ url: ":memory:" });
 
   // Create memories table with vector column (libSQL schema)
+  // IMPORTANT: Must match db/schema/memory.ts Drizzle schema exactly
   await client.execute(`
     CREATE TABLE memories (
       id TEXT PRIMARY KEY,
@@ -36,7 +37,12 @@ async function createTestDb(): Promise<{ client: Client; db: SwarmDb }> {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       decay_factor REAL DEFAULT 0.7,
-      embedding F32_BLOB(1024)
+      embedding F32_BLOB(1024),
+      valid_from TEXT,
+      valid_until TEXT,
+      superseded_by TEXT REFERENCES memories(id),
+      auto_tags TEXT,
+      keywords TEXT
     )
   `);
 
@@ -202,5 +208,88 @@ describe("MemoryAdapter - Integration Smoke Test", () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].matchType).toBe("fts");
     expect(results[0].memory.content).toContain("TypeScript");
+  });
+
+  test("Wave 1-2 Integration: Real services are wired with graceful degradation", async () => {
+    const config = {
+      ollamaHost: "http://localhost:11434",
+      ollamaModel: "mxbai-embed-large",
+    };
+    const adapter = createMemoryAdapter(db, config);
+
+    // Test 1: Auto-tagging service is wired (real service OR graceful degradation)
+    const mem1 = await adapter.store("OAuth tokens need 5min refresh buffer", {
+      collection: "auth",
+      autoGenerateTags: true,
+    });
+
+    const retrieved = await adapter.get(mem1.id);
+    expect(retrieved).not.toBeNull();
+
+    // Real service wired: auto_tags will be undefined (no API key) OR contain AutoTagResult
+    // Stub was wired: auto_tags would contain simple {tags: [...], confidence: 0.7}
+    // SUCCESS CRITERIA: No crash, graceful degradation
+    expect(retrieved?.id).toBe(mem1.id);
+
+    // If auto_tags present, verify it's from real service (has full structure) or undefined
+    if (retrieved?.metadata?.auto_tags) {
+      const autoTags = typeof retrieved.metadata.auto_tags === 'string'
+        ? JSON.parse(retrieved.metadata.auto_tags)
+        : retrieved.metadata.auto_tags;
+
+      // Real service returns {tags, keywords, categories, confidence}
+      // Stub returns {tags, confidence}
+      // This verifies real service structure (keywords/categories fields)
+      const hasKeywordsField = 'keywords' in autoTags;
+      const hasCategoriesField = 'categories' in autoTags;
+
+      expect(hasKeywordsField || hasCategoriesField).toBe(true);
+    }
+
+    // Test 2: Smart operation service is wired (real service OR graceful degradation)
+    await adapter.store("OAuth tokens expire after 1 hour", {
+      collection: "auth",
+    });
+
+    const result = await adapter.upsert(
+      "OAuth tokens expire after 60 minutes",
+      { useSmartOps: true, collection: "auth" }
+    );
+
+    // Real service wired: falls back to heuristics (no API key) OR uses LLM
+    // Stub was wired: always uses heuristics
+    // SUCCESS CRITERIA: No crash, returns valid operation
+    expect(result.operation).toBeDefined();
+    expect(result.reason).toBeDefined();
+    expect(['ADD', 'UPDATE', 'DELETE', 'NOOP']).toContain(result.operation);
+  });
+
+  test("Wave 1-2 Integration: Auto-linking service is wired", async () => {
+    const config = {
+      ollamaHost: "http://localhost:11434",
+      ollamaModel: "mxbai-embed-large",
+    };
+    const adapter = createMemoryAdapter(db, config);
+
+    // Store memories for linking
+    await adapter.store("OAuth tokens need refresh buffer", { collection: "auth" });
+    await adapter.store("JWT tokens have expiration time", { collection: "auth" });
+
+    // Store with auto-linking enabled
+    const mem3 = await adapter.store("Token refresh race conditions", {
+      collection: "auth",
+      autoLinkMemories: true,
+    });
+
+    // Real service wired: links will be created OR undefined (graceful degradation)
+    // Stub was wired: links would always be created (simple similarity)
+    // SUCCESS CRITERIA: No crash, graceful handling
+    expect(mem3.id).toBeDefined();
+
+    // If links created, verify they're valid
+    if (mem3.links && mem3.links.length > 0) {
+      expect(mem3.links[0].memory_id).toBeDefined();
+      expect(mem3.links[0].link_type).toBeDefined();
+    }
   });
 });

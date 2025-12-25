@@ -39,6 +39,8 @@ import {
 	legacyDatabaseExists,
 	migrateLegacyMemories,
 	toSwarmDb,
+	createMemoryAdapter as createSwarmMailAdapter,
+	type MemoryConfig,
 } from "swarm-mail";
 
 // ============================================================================
@@ -71,6 +73,12 @@ export interface StoreArgs {
 	readonly metadata?: string;
 	/** Confidence level (0.0-1.0) affecting decay rate. Higher = slower decay. Default 0.7 */
 	readonly confidence?: number;
+	/** Auto-generate tags using LLM. Default false */
+	readonly autoTag?: boolean;
+	/** Auto-link to related memories. Default false */
+	readonly autoLink?: boolean;
+	/** Extract entities (people, places, technologies). Default false */
+	readonly extractEntities?: boolean;
 }
 
 /** Arguments for find operation */
@@ -127,6 +135,39 @@ export interface HealthResult {
 export interface OperationResult {
 	readonly success: boolean;
 	readonly message?: string;
+}
+
+/** Arguments for upsert operation */
+export interface UpsertArgs {
+	readonly information: string;
+	readonly collection?: string;
+	readonly tags?: string;
+	readonly metadata?: string;
+	readonly confidence?: number;
+	/** Auto-generate tags using LLM. Default true */
+	readonly autoTag?: boolean;
+	/** Auto-link to related memories. Default true */
+	readonly autoLink?: boolean;
+	/** Extract entities (people, places, technologies). Default false */
+	readonly extractEntities?: boolean;
+}
+
+/** Auto-generated tags result */
+export interface AutoTags {
+	readonly tags: string[];
+	readonly keywords: string[];
+	readonly category: string;
+}
+
+/** Result from upsert operation */
+export interface UpsertResult {
+	readonly operation: "ADD" | "UPDATE" | "DELETE" | "NOOP";
+	readonly reason: string;
+	readonly memoryId?: string;
+	readonly affectedMemoryIds?: string[];
+	readonly autoTags?: AutoTags;
+	readonly linksCreated?: number;
+	readonly entitiesExtracted?: number;
 }
 
 // ============================================================================
@@ -206,6 +247,7 @@ export interface MemoryAdapter {
 	readonly list: (args: ListArgs) => Promise<Memory[]>;
 	readonly stats: () => Promise<StatsResult>;
 	readonly checkHealth: () => Promise<HealthResult>;
+	readonly upsert: (args: UpsertArgs) => Promise<UpsertResult>;
 }
 
 /**
@@ -236,10 +278,24 @@ export async function createMemoryAdapter(
 		await maybeAutoMigrate(db);
 	}
 
-	// Convert DatabaseAdapter to SwarmDb (Drizzle client) for createMemoryStore
+	// Convert DatabaseAdapter to SwarmDb (Drizzle client) for real swarm-mail adapter
 	const drizzleDb = toSwarmDb(db);
-	const store = createMemoryStore(drizzleDb);
 	const config = getDefaultConfig();
+	
+	// Create real swarm-mail adapter with Wave 1-3 features
+	const realAdapter = createSwarmMailAdapter(drizzleDb, config);
+	
+	// DEBUG: Check if upsert exists
+	if (!realAdapter || typeof realAdapter.upsert !== 'function') {
+		console.warn('[memory] realAdapter.upsert is not available:', {
+			hasAdapter: !!realAdapter,
+			upsertType: typeof realAdapter?.upsert,
+			methods: realAdapter ? Object.keys(realAdapter) : []
+		});
+	}
+	
+	// For backward compatibility, keep legacy adapter for methods not yet in real adapter
+	const store = createMemoryStore(drizzleDb);
 	const ollamaLayer = makeOllamaLive(config);
 
 	/**
@@ -272,59 +328,39 @@ export async function createMemoryAdapter(
 
 	return {
 		/**
-		 * Store a memory with embedding
+		 * Store a memory with embedding and optional auto-features
+		 * 
+		 * Delegates to real swarm-mail adapter which supports:
+		 * - autoTag: LLM-powered tag generation
+		 * - autoLink: Semantic linking to related memories
+		 * - extractEntities: Entity extraction and knowledge graph building
 		 */
 		async store(args: StoreArgs): Promise<StoreResult> {
-			const id = generateId();
-			const tags = parseTags(args.tags);
-			const collection = args.collection ?? "default";
-
-			// Parse metadata if provided
-			let metadata: Record<string, unknown> = {};
-			if (args.metadata) {
-				try {
-					metadata = JSON.parse(args.metadata);
-				} catch {
-					metadata = { raw: args.metadata };
-				}
-			}
-
-			// Add tags to metadata
-			if (tags.length > 0) {
-				metadata.tags = tags;
-			}
-
-			// Clamp confidence to valid range [0.0, 1.0]
-			const clampConfidence = (c: number | undefined): number => {
-				if (c === undefined) return 0.7;
-				return Math.max(0.0, Math.min(1.0, c));
-			};
-
-			const memory: Memory = {
-				id,
-				content: args.information,
-				metadata,
-				collection,
-				createdAt: new Date(),
-				confidence: clampConfidence(args.confidence),
-			};
-
-			// Generate embedding
-			const program = Effect.gen(function* () {
-				const ollama = yield* Ollama;
-				return yield* ollama.embed(args.information);
+			// Delegate to real swarm-mail adapter
+			const result = await realAdapter.store(args.information, {
+				collection: args.collection,
+				tags: args.tags,
+				metadata: args.metadata,
+				confidence: args.confidence,
+				autoTag: args.autoTag,
+				autoLink: args.autoLink,
+				extractEntities: args.extractEntities,
 			});
 
-			const embedding = await Effect.runPromise(
-				program.pipe(Effect.provide(ollamaLayer)),
-			);
-
-			// Store memory
-			await store.store(memory, embedding);
+			// Build user-facing message
+			let message = `Stored memory ${result.id} in collection: ${args.collection ?? "default"}`;
+			
+			if (result.autoTags) {
+				message += `\nAuto-tags: ${result.autoTags.tags.join(", ")}`;
+			}
+			
+			if (result.links && result.links.length > 0) {
+				message += `\nLinked to ${result.links.length} related memor${result.links.length === 1 ? "y" : "ies"}`;
+			}
 
 			return {
-				id,
-				message: `Stored memory ${id} in collection: ${collection}`,
+				id: result.id,
+				message,
 			};
 		},
 
@@ -449,6 +485,43 @@ export async function createMemoryAdapter(
 						error instanceof Error ? error.message : "Ollama not available",
 				};
 			}
+		},
+
+		/**
+		 * Smart upsert - uses LLM to decide ADD, UPDATE, DELETE, or NOOP
+		 *
+		 * Delegates to real swarm-mail adapter with Mem0 pattern:
+		 * - Finds semantically similar memories
+		 * - LLM analyzes and decides operation
+		 * - Executes with graceful degradation on LLM failures
+		 */
+		async upsert(args: UpsertArgs): Promise<UpsertResult> {
+			// Validate required fields
+			if (!args.information) {
+				throw new Error("information is required for upsert");
+			}
+
+			// Delegate to real swarm-mail adapter with useSmartOps enabled
+			const result = await realAdapter.upsert(args.information, {
+				collection: args.collection,
+				tags: args.tags,
+				metadata: args.metadata,
+				confidence: args.confidence,
+				useSmartOps: true, // Enable LLM-powered decision making
+				autoTag: args.autoTag,
+				autoLink: args.autoLink,
+				extractEntities: args.extractEntities,
+			});
+
+			// Map real adapter result to plugin UpsertResult format
+			return {
+				operation: result.operation,
+				reason: result.reason,
+				memoryId: result.id,
+				affectedMemoryIds: [result.id],
+				// Note: Real adapter doesn't return autoTags/links from upsert yet
+				// Those are only on store(). This is consistent with current behavior.
+			};
 		},
 	};
 }

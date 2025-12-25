@@ -173,16 +173,17 @@ describe("forbiddenToolsPresent scorer", () => {
 - Edit (use swarm_spawn_subtask)
 - Write (use swarm_spawn_subtask)
 - swarmmail_reserve (only workers reserve)
-- bash with git commit (workers commit)`,
+- git commit (workers commit)
+- bash (for file modifications)`,
 		};
 
 		const result = scoreForbiddenToolsPresent(prompt);
 
 		expect(result.score).toBe(1.0);
-		expect(result.message).toContain("All 4 forbidden tools");
+		expect(result.message).toContain("All 5 forbidden tools");
 	});
 
-	test("scores 0.75 when 3 out of 4 tools listed", () => {
+	test("scores 0.6 when 3 out of 5 tools listed", () => {
 		const prompt: CompactionPrompt = {
 			content: `🚫 FORBIDDEN TOOLS:
 - Edit
@@ -192,19 +193,19 @@ describe("forbiddenToolsPresent scorer", () => {
 
 		const result = scoreForbiddenToolsPresent(prompt);
 
-		expect(result.score).toBe(0.75);
-		expect(result.message).toContain("3/4");
+		expect(result.score).toBe(0.6);
+		expect(result.message).toContain("3/5");
 	});
 
-	test("scores 0.5 when 2 out of 4 tools listed", () => {
+	test("scores 0.4 when 2 out of 5 tools listed", () => {
 		const prompt: CompactionPrompt = {
 			content: `Don't use Edit or Write directly.`,
 		};
 
 		const result = scoreForbiddenToolsPresent(prompt);
 
-		expect(result.score).toBe(0.5);
-		expect(result.message).toContain("2/4");
+		expect(result.score).toBe(0.4);
+		expect(result.message).toContain("2/5");
 	});
 
 	test("scores 0.0 when no forbidden tools listed", () => {
@@ -215,7 +216,7 @@ describe("forbiddenToolsPresent scorer", () => {
 		const result = scoreForbiddenToolsPresent(prompt);
 
 		expect(result.score).toBe(0.0);
-		expect(result.message).toContain("0/4");
+		expect(result.message).toContain("0/5");
 	});
 });
 

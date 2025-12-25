@@ -25,6 +25,13 @@ export {
 
 export { createMemoryStore, EMBEDDING_DIM } from "./store.js";
 
+// Auto-tagging (LLM-based tag generation)
+export {
+	generateTags,
+	type AutoTagConfig,
+	type AutoTagResult,
+} from "./auto-tagger.js";
+
 // Migrations
 export { memoryMigration, memoryMigrations } from "./migrations.js";
 

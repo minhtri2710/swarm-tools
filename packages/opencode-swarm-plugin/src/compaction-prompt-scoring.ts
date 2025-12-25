@@ -203,6 +203,7 @@ export function scoreCoordinatorIdentity(
  * 2. Write
  * 3. swarmmail_reserve (only workers reserve)
  * 4. git commit (workers commit)
+ * 5. bash (for file modifications)
  *
  * @returns ratio of forbidden tools mentioned (0.0 to 1.0)
  */
@@ -211,10 +212,11 @@ export function scoreForbiddenToolsPresent(
 ): ScorerResult {
 	// Check for forbidden tool mentions
 	const forbiddenTools = [
-		/\bEdit\b/,
-		/\bWrite\b/,
+		/\bEdit\b/i,
+		/\bWrite\b/i,
 		/swarmmail_reserve/,
 		/git commit/,
+		/\bbash\b/i,
 	];
 
 	const foundTools = forbiddenTools.filter((pattern) =>
@@ -226,20 +228,20 @@ export function scoreForbiddenToolsPresent(
 	if (score === 1.0) {
 		return {
 			score: 1.0,
-			message: "All 4 forbidden tools listed",
+			message: "All 5 forbidden tools listed",
 		};
 	}
 
 	if (score === 0) {
 		return {
 			score: 0.0,
-			message: "No forbidden tools listed (0/4)",
+			message: "No forbidden tools listed (0/5)",
 		};
 	}
 
 	return {
 		score,
-		message: `${foundTools.length}/4 forbidden tools listed`,
+		message: `${foundTools.length}/5 forbidden tools listed`,
 	};
 }
 

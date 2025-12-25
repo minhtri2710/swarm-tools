@@ -244,6 +244,52 @@ export {
 export { createTestMemoryDb } from "./memory/test-utils";
 
 // ============================================================================
+// Wave 1-2: Memory Intelligence Services
+// ============================================================================
+
+// Smart operations (ADD/UPDATE/DELETE/NOOP analysis)
+export { analyzeMemoryOperation } from "./memory/memory-operations";
+export type {
+	MemoryOperation,
+	MemoryOperationConfig,
+} from "./memory/memory-operations";
+
+// Auto-tagging (LLM-powered tag generation)
+export { generateTags } from "./memory/auto-tagger";
+export type {
+	AutoTagConfig,
+	AutoTagResult,
+} from "./memory/auto-tagger";
+
+// Memory linking (semantic relationship detection)
+export {
+	autoLinkMemory,
+	createLink,
+	findRelatedMemories,
+	getLinks,
+	updateLinkStrength,
+} from "./memory/memory-linking";
+export type {
+	LinkingConfig,
+	MemoryLink,
+} from "./memory/memory-linking";
+
+// Entity extraction (knowledge graph building)
+export {
+	extractEntitiesAndRelationships,
+	getEntitiesByType,
+	getRelationshipsForEntity,
+	linkMemoryToEntities,
+	storeEntities,
+	storeRelationships,
+} from "./memory/entity-extraction";
+export type {
+	Entity,
+	ExtractionResult,
+	Relationship,
+} from "./memory/entity-extraction";
+
+// ============================================================================
 // Drizzle Database Client (for memory store)
 // ============================================================================
 

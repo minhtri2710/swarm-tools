@@ -73,8 +73,6 @@ export function createDurableStreamServer(
   >();
   let subscriptionCounter = 0;
 
-  const url = `http://localhost:${port}`;
-
   async function start(): Promise<void> {
     if (bunServer) {
       throw new Error("Server is already running");
@@ -220,6 +218,10 @@ export function createDurableStreamServer(
   return {
     start,
     stop,
-    url,
+    get url() {
+      // Return actual port after server starts (supports port 0)
+      const effectivePort = bunServer?.port ?? port;
+      return `http://localhost:${effectivePort}`;
+    },
   };
 }
