@@ -430,11 +430,24 @@ Changesets doesn't support Bun workspaces out of the box - it doesn't resolve `w
 
 ### Release Flow
 
-The CI workflow uses a state machine with three states:
+We use the standard `changesets/action@v1` with BOTH `version` and `publish` scripts. **Don't fight the action** - it handles the state machine internally:
 
-1. **`has_changesets`** - Publishable changesets exist → creates version PR
-2. **`needs_publish`** - No changesets but local versions > npm → publishes to npm
-3. **`nothing`** - All packages up to date → skips everything
+```yaml
+- name: Create and publish versions
+  uses: changesets/action@v1
+  with:
+    version: bun run ci:version
+    commit: "chore: update versions"
+    title: "chore: update versions"
+    publish: bun run ci:publish
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+The action automatically determines:
+- **Changesets exist** → runs `version` script, creates PR
+- **No changesets, PR just merged** → runs `publish` script
+- **Nothing to do** → exits cleanly
 
 **Normal flow:**
 
@@ -450,14 +463,15 @@ The CI workflow uses a state machine with three states:
    EOF
    ```
 3. Commit the changeset file with your changes
-4. Push to main → CI detects `has_changesets` → creates "chore: release packages" PR
-5. Merge that PR → CI detects `needs_publish` → runs `ci:publish` → packages on npm
+4. Push to main → action creates "chore: update versions" PR
+5. Merge that PR → action runs `ci:publish` → packages on npm
+
+**CRITICAL: Don't create changesets for ignored packages.** If you create a changeset that only affects `@swarmtools/web` (which is in `.changeset/config.json` ignore list), the action will try to create a version PR with no actual changes, causing a "No commits between main and changeset-release/main" error.
 
 **Edge cases handled:**
 
-- Only ignored packages have changesets → `nothing` state, no error
-- Version PR merged but publish failed → next push detects `needs_publish` and retries
-- No changes at all → `nothing` state, clean exit
+- Version PR merged but publish failed → next push retries publish
+- No changes at all → clean exit
 
 ### Changeset Lore (REQUIRED)
 
