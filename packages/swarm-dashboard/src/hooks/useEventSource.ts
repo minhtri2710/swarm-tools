@@ -73,16 +73,14 @@ export function useEventSource(
     }));
 
     try {
-      // Build URL with lastEventId if available
-      const eventSourceUrl = state.lastEventId
-        ? `${url}?lastEventId=${encodeURIComponent(state.lastEventId)}`
-        : url;
-
-      const es = new EventSource(eventSourceUrl);
+      const es = new EventSource(url);
       eventSourceRef.current = es;
 
       es.onopen = () => {
-        if (unmountedRef.current) return;
+        if (unmountedRef.current) {
+          es.close();
+          return;
+        }
         
         setState((prev) => ({
           ...prev,
@@ -156,7 +154,9 @@ export function useEventSource(
         error instanceof Error ? error : new Error(String(error))
       );
     }
-  }, [url, state.lastEventId, reconnect, initialRetryDelay, maxRetryDelay, onMessage, onOpen, onError]);
+  // Remove state.lastEventId from deps - it causes infinite re-renders
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, reconnect, initialRetryDelay, maxRetryDelay, onMessage, onOpen, onError]);
 
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
@@ -177,6 +177,9 @@ export function useEventSource(
 
   // Connect on mount or URL change
   useEffect(() => {
+    // Reset unmounted flag on mount
+    unmountedRef.current = false;
+    
     if (url) {
       connect();
     }

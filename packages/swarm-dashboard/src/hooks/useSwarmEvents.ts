@@ -55,22 +55,30 @@ export function useSwarmEvents(options: UseSwarmEventsOptions = {}) {
   const handleMessage = useCallback(
     (messageEvent: MessageEvent) => {
       try {
-        // Parse event data as JSON
-        const data = JSON.parse(messageEvent.data) as AgentEvent;
+        // Parse outer wrapper from DurableStreamServer
+        // Format: { offset: number, data: string (JSON), timestamp: number }
+        const wrapper = JSON.parse(messageEvent.data) as { 
+          offset: number; 
+          data: string; 
+          timestamp: number;
+        };
+        
+        // Parse inner event data (double-encoded JSON)
+        const event = JSON.parse(wrapper.data) as AgentEvent;
 
         // Filter by project_key if specified
-        if (projectKey && data.project_key !== projectKey) {
+        if (projectKey && event.project_key !== projectKey) {
           return;
         }
 
         // Update state
-        setLatestEvent(data);
-        setEvents((prev) => [...prev, data]);
+        setLatestEvent(event);
+        setEvents((prev) => [...prev, event]);
 
         // Call event callback
-        onEvent?.(data);
+        onEvent?.(event);
       } catch (error) {
-        console.error("Failed to parse SSE event:", error);
+        console.error("Failed to parse SSE event:", error, messageEvent.data);
       }
     },
     [projectKey, onEvent]

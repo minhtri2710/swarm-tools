@@ -140,6 +140,80 @@ export function createDurableStreamServer(
           }
         }
 
+        // Route: GET /events - SSE stream for all events (dashboard convenience endpoint)
+        // This is an alias for /streams/:projectKey?live=true using the configured projectKey
+        if (url.pathname === "/events") {
+          // Use configured projectKey or default to "*" for all
+          const projectKeyForEvents = configProjectKey || "*";
+          
+          // Parse query params
+          const offsetParam = url.searchParams.get("offset");
+          const limitParam = url.searchParams.get("limit");
+          const offset = offsetParam ? Number.parseInt(offsetParam, 10) : 0;
+          const limit = limitParam ? Number.parseInt(limitParam, 10) : 100;
+
+          // Always live mode for /events endpoint
+          const stream = new ReadableStream({
+            async start(controller) {
+              const encoder = new TextEncoder();
+
+              // Send SSE comment to flush headers and establish connection
+              controller.enqueue(encoder.encode(": connected\n\n"));
+
+              // Send existing events first
+              const existingEvents = await adapter.read(offset, limit);
+              for (const event of existingEvents) {
+                const sse = `data: ${JSON.stringify(event)}\n\n`;
+                controller.enqueue(encoder.encode(sse));
+              }
+
+              // Subscribe to new events
+              const subscriptionId = subscriptionCounter++;
+              const unsubscribe = adapter.subscribe(
+                (event: StreamEvent) => {
+                  if (event.offset > offset) {
+                    try {
+                      const sse = `data: ${JSON.stringify(event)}\n\n`;
+                      controller.enqueue(encoder.encode(sse));
+                    } catch (error) {
+                      console.error("Error sending event:", error);
+                    }
+                  }
+                },
+                offset,
+              );
+
+              subscriptions.set(subscriptionId, { unsubscribe, controller });
+
+              req.signal.addEventListener("abort", () => {
+                const sub = subscriptions.get(subscriptionId);
+                if (sub) {
+                  sub.unsubscribe();
+                  subscriptions.delete(subscriptionId);
+                }
+                try {
+                  controller.close();
+                } catch {
+                  // Already closed
+                }
+              });
+            },
+            cancel() {
+              // Client cancelled - cleanup via abort signal
+            },
+          });
+
+          return new Response(stream, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+              ...CORS_HEADERS,
+            },
+          });
+        }
+
         // Parse route: /streams/:projectKey
         const match = url.pathname.match(/^\/streams\/(.+)$/);
         if (!match) {
