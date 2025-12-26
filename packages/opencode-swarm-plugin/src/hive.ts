@@ -1121,6 +1121,51 @@ export const hive_close = tool({
             total_files_touched: totalFilesTouched,
           });
           await appendEvent(swarmCompletedEvent, projectKey);
+          
+          // Run validation hook (fire-and-forget)
+          // This validates the swarm event stream and emits validation events
+          // Don't block on it - validation is for observability, not a gate
+          try {
+            const { runPostSwarmValidation } = await import("./swarm-validation");
+            const { readEvents } = await import("swarm-mail");
+            
+            // Query events for this swarm
+            const swarmEvents = await readEvents({
+              projectKey,
+              types: [
+                "swarm_started",
+                "swarm_completed",
+                "worker_spawned",
+                "subtask_outcome",
+                "decomposition_generated",
+              ],
+            }, projectKey);
+            
+            // Fire validation asynchronously
+            runPostSwarmValidation(
+              {
+                project_key: projectKey,
+                epic_id: cellId,
+                swarm_id: cellId, // Use epic ID as swarm ID
+                started_at: new Date(),
+                emit: async (event) => {
+                  // Use the same event emitter
+                  // Cast to any to bypass type checking - validation events are defined in swarm-mail
+                  await appendEvent(event as any, projectKey);
+                },
+              },
+              swarmEvents
+            ).then(result => {
+              if (!result.passed) {
+                console.warn(`[Validation] Found ${result.issues.length} issues in swarm ${cellId}`);
+              }
+            }).catch(err => {
+              console.error(`[Validation] Failed:`, err);
+            });
+          } catch (error) {
+            // Non-fatal - validation is observability, not critical path
+            console.warn("[hive_close] Validation hook failed (non-fatal):", error);
+          }
         } catch (error) {
           // Non-fatal - log and continue
           console.warn("[hive_close] Failed to emit SwarmCompletedEvent:", error);

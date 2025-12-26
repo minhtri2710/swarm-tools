@@ -384,6 +384,47 @@ export const SwarmCompletedEventSchema = BaseEventSchema.extend({
 });
 
 // ============================================================================
+// Validation Events
+// ============================================================================
+
+export const ValidationStartedEventSchema = BaseEventSchema.extend({
+  type: z.literal("validation_started"),
+  epic_id: z.string(),
+  swarm_id: z.string(),
+  started_at: z.number(),
+});
+
+export const ValidationIssueEventSchema = BaseEventSchema.extend({
+  type: z.literal("validation_issue"),
+  epic_id: z.string(),
+  severity: z.enum(["error", "warning", "info"]),
+  category: z.enum([
+    "schema_mismatch",
+    "missing_event",
+    "undefined_value",
+    "dashboard_render",
+    "websocket_delivery",
+  ]),
+  message: z.string(),
+  location: z
+    .object({
+      event_type: z.string().optional(),
+      field: z.string().optional(),
+      component: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const ValidationCompletedEventSchema = BaseEventSchema.extend({
+  type: z.literal("validation_completed"),
+  epic_id: z.string(),
+  swarm_id: z.string(),
+  passed: z.boolean(),
+  issue_count: z.number().int().min(0),
+  duration_ms: z.number().int().min(0),
+});
+
+// ============================================================================
 // Union Type
 // ============================================================================
 
@@ -415,6 +456,9 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
   ReviewStartedEventSchema,
   ReviewCompletedEventSchema,
   SwarmCompletedEventSchema,
+  ValidationStartedEventSchema,
+  ValidationIssueEventSchema,
+  ValidationCompletedEventSchema,
 ]);
 
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
@@ -451,6 +495,9 @@ export type WorkerCompletedEvent = z.infer<typeof WorkerCompletedEventSchema>;
 export type ReviewStartedEvent = z.infer<typeof ReviewStartedEventSchema>;
 export type ReviewCompletedEvent = z.infer<typeof ReviewCompletedEventSchema>;
 export type SwarmCompletedEvent = z.infer<typeof SwarmCompletedEventSchema>;
+export type ValidationStartedEvent = z.infer<typeof ValidationStartedEventSchema>;
+export type ValidationIssueEvent = z.infer<typeof ValidationIssueEventSchema>;
+export type ValidationCompletedEvent = z.infer<typeof ValidationCompletedEventSchema>;
 
 // ============================================================================
 // Session State Types

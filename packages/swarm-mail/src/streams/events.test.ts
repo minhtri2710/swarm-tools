@@ -1370,3 +1370,220 @@ describe("ContextCompactedEvent", () => {
     ).toThrow();
   });
 });
+
+// ============================================================================
+// Validation Events Tests
+// ============================================================================
+
+describe("ValidationStartedEventSchema", () => {
+  it("validates a complete validation_started event", () => {
+    const event = {
+      type: "validation_started",
+      project_key: "/test/project",
+      timestamp: Date.now(),
+      epic_id: "bd-123",
+      swarm_id: "swarm-456",
+      started_at: Date.now(),
+    };
+    expect(() => AgentEventSchema.parse(event)).not.toThrow();
+  });
+
+  it("requires epic_id and swarm_id", () => {
+    expect(() =>
+      AgentEventSchema.parse({
+        type: "validation_started",
+        project_key: "/test/project",
+        timestamp: Date.now(),
+        started_at: Date.now(),
+      }),
+    ).toThrow();
+  });
+});
+
+describe("ValidationIssueEventSchema", () => {
+  it("validates a complete validation_issue event", () => {
+    const event = {
+      type: "validation_issue",
+      project_key: "/test/project",
+      timestamp: Date.now(),
+      epic_id: "bd-123",
+      severity: "error",
+      category: "schema_mismatch",
+      message: "Missing required field",
+      location: {
+        event_type: "worker_spawned",
+        field: "worker_agent",
+        component: "Dashboard",
+      },
+    };
+    expect(() => AgentEventSchema.parse(event)).not.toThrow();
+  });
+
+  it("validates severity enum", () => {
+    const baseEvent = {
+      type: "validation_issue",
+      project_key: "/test/project",
+      timestamp: Date.now(),
+      epic_id: "bd-123",
+      category: "schema_mismatch",
+      message: "Test",
+    };
+
+    // Valid severities
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, severity: "error" }),
+    ).not.toThrow();
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, severity: "warning" }),
+    ).not.toThrow();
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, severity: "info" }),
+    ).not.toThrow();
+
+    // Invalid severity
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, severity: "critical" }),
+    ).toThrow();
+  });
+
+  it("validates category enum", () => {
+    const baseEvent = {
+      type: "validation_issue",
+      project_key: "/test/project",
+      timestamp: Date.now(),
+      epic_id: "bd-123",
+      severity: "error",
+      message: "Test",
+    };
+
+    // Valid categories
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, category: "schema_mismatch" }),
+    ).not.toThrow();
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, category: "missing_event" }),
+    ).not.toThrow();
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, category: "undefined_value" }),
+    ).not.toThrow();
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, category: "dashboard_render" }),
+    ).not.toThrow();
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, category: "websocket_delivery" }),
+    ).not.toThrow();
+
+    // Invalid category
+    expect(() =>
+      AgentEventSchema.parse({ ...baseEvent, category: "unknown" }),
+    ).toThrow();
+  });
+
+  it("validates optional location object", () => {
+    const baseEvent = {
+      type: "validation_issue",
+      project_key: "/test/project",
+      timestamp: Date.now(),
+      epic_id: "bd-123",
+      severity: "error",
+      category: "schema_mismatch",
+      message: "Test",
+    };
+
+    // Without location
+    expect(() => AgentEventSchema.parse(baseEvent)).not.toThrow();
+
+    // With partial location
+    expect(() =>
+      AgentEventSchema.parse({
+        ...baseEvent,
+        location: { event_type: "worker_spawned" },
+      }),
+    ).not.toThrow();
+
+    // With full location
+    expect(() =>
+      AgentEventSchema.parse({
+        ...baseEvent,
+        location: {
+          event_type: "worker_spawned",
+          field: "worker_agent",
+          component: "Dashboard",
+        },
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("ValidationCompletedEventSchema", () => {
+  it("validates a complete validation_completed event", () => {
+    const event = {
+      type: "validation_completed",
+      project_key: "/test/project",
+      timestamp: Date.now(),
+      epic_id: "bd-123",
+      swarm_id: "swarm-456",
+      passed: true,
+      issue_count: 0,
+      duration_ms: 150,
+    };
+    expect(() => AgentEventSchema.parse(event)).not.toThrow();
+  });
+
+  it("validates with issues", () => {
+    const event = {
+      type: "validation_completed",
+      project_key: "/test/project",
+      timestamp: Date.now(),
+      epic_id: "bd-123",
+      swarm_id: "swarm-456",
+      passed: false,
+      issue_count: 3,
+      duration_ms: 200,
+    };
+    expect(() => AgentEventSchema.parse(event)).not.toThrow();
+  });
+
+  it("requires epic_id and swarm_id", () => {
+    expect(() =>
+      AgentEventSchema.parse({
+        type: "validation_completed",
+        project_key: "/test/project",
+        timestamp: Date.now(),
+        passed: true,
+        issue_count: 0,
+        duration_ms: 100,
+      }),
+    ).toThrow();
+  });
+
+  it("validates non-negative issue_count", () => {
+    expect(() =>
+      AgentEventSchema.parse({
+        type: "validation_completed",
+        project_key: "/test/project",
+        timestamp: Date.now(),
+        epic_id: "bd-123",
+        swarm_id: "swarm-456",
+        passed: false,
+        issue_count: -1,
+        duration_ms: 100,
+      }),
+    ).toThrow();
+  });
+
+  it("validates non-negative duration_ms", () => {
+    expect(() =>
+      AgentEventSchema.parse({
+        type: "validation_completed",
+        project_key: "/test/project",
+        timestamp: Date.now(),
+        epic_id: "bd-123",
+        swarm_id: "swarm-456",
+        passed: true,
+        issue_count: 0,
+        duration_ms: -100,
+      }),
+    ).toThrow();
+  });
+});

@@ -938,3 +938,30 @@ export {
   type DiscoveredTool,
   type VersionInfo,
 } from "./swarm-research";
+
+/**
+ * Re-export swarm-validation module
+ *
+ * Provides validation event types and hooks for post-swarm validation.
+ * Integrates with swarm-mail event sourcing to emit validation events.
+ *
+ * Includes:
+ * - ValidationIssueSeverity - Zod schema for severity levels (error, warning, info)
+ * - ValidationIssueCategory - Zod schema for issue categories
+ * - ValidationIssueSchema - Zod schema for validation issues
+ * - runPostSwarmValidation - Main validation hook
+ * - reportIssue - Helper to emit validation_issue events
+ *
+ * Types:
+ * - ValidationIssue - Validation issue with severity, category, message, and optional location
+ * - ValidationContext - Context for validation execution
+ */
+export {
+  ValidationIssueSeverity,
+  ValidationIssueCategory,
+  ValidationIssueSchema,
+  runPostSwarmValidation,
+  reportIssue,
+  type ValidationIssue,
+  type ValidationContext,
+} from "./swarm-validation";
