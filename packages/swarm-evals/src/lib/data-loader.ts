@@ -115,7 +115,7 @@ export async function getEvalDataSummary(
  * Check if a session meets quality criteria
  */
 function meetsQualityCriteria(
-  session: import("../../src/eval-capture.js").CoordinatorSession,
+  session: import("opencode-swarm-plugin/eval-capture").CoordinatorSession,
   criteria: {
     minEvents: number;
     requireWorkerSpawn: boolean;
@@ -178,10 +178,10 @@ export async function loadCapturedSessions(options?: {
   /** Override session directory for testing */
   sessionDir?: string;
 }): Promise<
-  Array<{ session: import("../../src/eval-capture.js").CoordinatorSession }>
+  Array<{ session: import("opencode-swarm-plugin/eval-capture").CoordinatorSession }>
 > {
   const { getSessionDir, readSessionEvents, saveSession } = await import(
-    "../../src/eval-capture.js"
+    "opencode-swarm-plugin/eval-capture"
   );
   const sessionDir = options?.sessionDir ?? getSessionDir();
 
@@ -209,7 +209,7 @@ export async function loadCapturedSessions(options?: {
 
   // Load each session
   const sessions: Array<{
-    session: import("../../src/eval-capture.js").CoordinatorSession;
+    session: import("opencode-swarm-plugin/eval-capture").CoordinatorSession;
   }> = [];
   let filteredOutCount = 0;
 
@@ -217,7 +217,7 @@ export async function loadCapturedSessions(options?: {
     const sessionId = file.replace(".jsonl", "");
 
     try {
-      let events: import("../../src/eval-capture.js").CoordinatorEvent[];
+      let events: import("opencode-swarm-plugin/eval-capture").CoordinatorEvent[];
 
       // If custom sessionDir, read directly; otherwise use eval-capture functions
       if (options?.sessionDir) {
@@ -227,7 +227,7 @@ export async function loadCapturedSessions(options?: {
         const content = fs.readFileSync(sessionPath, "utf-8");
         const lines = content.trim().split("\n").filter(Boolean);
         const { CoordinatorEventSchema } = await import(
-          "../../src/eval-capture.js"
+          "opencode-swarm-plugin/eval-capture"
         );
         events = lines.map((line) => {
           const parsed = JSON.parse(line);
@@ -244,7 +244,7 @@ export async function loadCapturedSessions(options?: {
       if (!epicId) continue;
 
       // Build session object
-      const session: import("../../src/eval-capture.js").CoordinatorSession = {
+      const session: import("opencode-swarm-plugin/eval-capture").CoordinatorSession = {
         session_id: sessionId,
         epic_id: epicId,
         start_time: events[0]?.timestamp ?? new Date().toISOString(),

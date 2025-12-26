@@ -5,7 +5,7 @@
  * Each fixture demonstrates good or bad coordinator behavior.
  */
 
-import type { CoordinatorSession } from "../../src/eval-capture.js";
+import type { CoordinatorSession } from "opencode-swarm-plugin/eval-capture";
 
 /**
  * PERFECT COORDINATOR

@@ -1,5 +1,5 @@
 import { createScorer } from "evalite";
-import type { EvalRecord } from "../../src/eval-capture.js";
+import type { EvalRecord } from "opencode-swarm-plugin/eval-capture";
 
 /**
  * Outcome-based scorers for evaluating decomposition quality

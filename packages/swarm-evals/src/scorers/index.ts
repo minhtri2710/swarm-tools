@@ -1,7 +1,7 @@
 import { createScorer } from "evalite";
 import { generateText, gateway } from "ai";
 import type { GatewayModelId } from "ai";
-import type { CellTree } from "../../src/schemas/index.js";
+import type { CellTree } from "opencode-swarm-plugin";
 
 const JUDGE_MODEL: GatewayModelId = "anthropic/claude-haiku-4-5";
 

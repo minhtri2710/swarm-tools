@@ -10,7 +10,7 @@
  * - Correct first tool suggestion
  */
 
-import type { CompactionPrompt } from "../../src/compaction-prompt-scoring.js";
+import type { CompactionPrompt } from "opencode-swarm-plugin/compaction-prompt-scoring";
 
 /**
  * Compaction prompt test case structure

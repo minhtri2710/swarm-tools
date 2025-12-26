@@ -12,7 +12,7 @@
  */
 
 import { createScorer } from "evalite";
-import type { CoordinatorSession } from "../../src/eval-capture.js";
+import type { CoordinatorSession } from "opencode-swarm-plugin/eval-capture";
 
 /**
  * Violation Count Scorer
