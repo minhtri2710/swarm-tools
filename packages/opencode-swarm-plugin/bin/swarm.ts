@@ -2917,9 +2917,9 @@ ${cyan("Commands:")}
   swarm config    Show paths to generated config files
   swarm agents    Update AGENTS.md with skill awareness
   swarm migrate   Migrate PGlite database to libSQL
-  swarm serve     Start SSE server for real-time event streaming
-    --port <n>          Port to listen on (default: 3001)
-  swarm viz       Start dashboard server (port 4483 - HIVE on phone keypad)
+  swarm serve     Start SSE server for real-time event streaming (port 4483 - HIVE)
+    --port <n>          Port to listen on (default: 4483)
+  swarm viz       Alias for 'swarm serve' (deprecated, use serve)
     --port <n>          Port to listen on (default: 4483)
   swarm cells     List or get cells from database (replaces 'swarm tool hive_query')
   swarm log       View swarm logs with filtering
@@ -4921,21 +4921,21 @@ async function evalRun() {
 async function serve() {
   p.intro("swarm serve v" + VERSION);
 
-  // Parse --port flag (default 3001)
+  // Parse --port flag (default 4483 - HIVE on phone keypad)
   const portFlagIndex = process.argv.indexOf("--port");
   const port = portFlagIndex !== -1 
-    ? Number.parseInt(process.argv[portFlagIndex + 1]) || 3001
-    : 3001;
+    ? Number.parseInt(process.argv[portFlagIndex + 1]) || 4483
+    : 4483;
 
   const projectPath = process.cwd();
 
   p.log.step("Starting DurableStreamServer...");
   p.log.message(dim(`  Project: ${projectPath}`));
-  p.log.message(dim(`  Port: ${port}`));
+  p.log.message(dim(`  Port: ${port} (HIVE on phone keypad)`));
 
   try {
     // Import dependencies
-    const { getSwarmMailLibSQL } = await import("swarm-mail");
+    const { getSwarmMailLibSQL, createHiveAdapter } = await import("swarm-mail");
     const { createDurableStreamAdapter, createDurableStreamServer } = await import("swarm-mail");
 
     // Get swarm-mail adapter
@@ -4944,9 +4944,14 @@ async function serve() {
     // Create stream adapter
     const streamAdapter = createDurableStreamAdapter(swarmMail, projectPath);
     
+    // Create hive adapter for cells endpoint
+    const db = await swarmMail.getDatabase(projectPath);
+    const hiveAdapter = createHiveAdapter(db, projectPath);
+    
     // Create and start server
     const server = createDurableStreamServer({
       adapter: streamAdapter,
+      hiveAdapter,
       port,
       projectKey: projectPath,
     });
@@ -4955,8 +4960,9 @@ async function serve() {
 
     p.log.success("Server started!");
     p.log.message("");
-    p.log.message(cyan("  Dashboard: http://localhost:5173"));
+    p.log.message(cyan(`  Dashboard: http://localhost:5173`));
     p.log.message(cyan(`  SSE Endpoint: ${server.url}/streams/${encodeURIComponent(projectPath)}`));
+    p.log.message(cyan(`  Cells API: ${server.url}/cells`));
     p.log.message("");
     p.log.message(dim("  Press Ctrl+C to stop"));
 
@@ -5001,7 +5007,7 @@ async function viz() {
     const streamAdapter = createDurableStreamAdapter(swarmMail, projectPath);
     
     // Create hive adapter for cells endpoint
-    const db = swarmMail.db;
+    const db = await swarmMail.getDatabase(projectPath);
     const hiveAdapter = createHiveAdapter(db, projectPath);
     
     // Create and start server

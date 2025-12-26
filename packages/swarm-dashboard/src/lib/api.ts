@@ -48,10 +48,10 @@ interface HiveCell {
  * 
  * Falls back to empty array if endpoint is not available (server not running or endpoint not implemented).
  * 
- * @param baseUrl - SSE server URL (default http://localhost:3001)
+ * @param baseUrl - SSE server URL (default http://localhost:4483 - HIVE on phone keypad)
  * @returns Array of cells with parent-child tree structure
  */
-export async function getCells(baseUrl = "http://localhost:3001"): Promise<Cell[]> {
+export async function getCells(baseUrl = "http://localhost:4483"): Promise<Cell[]> {
   try {
     const response = await fetch(`${baseUrl}/cells`);
     

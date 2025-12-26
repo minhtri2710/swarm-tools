@@ -29,7 +29,7 @@ const ACTIVE_THRESHOLD_MS = 5 * 60 * 1000;
 
 export function AgentsPane() {
   const { state, events, getEventsByType } = useSwarmEvents({
-    url: "http://localhost:3001/events",
+    url: "http://localhost:4483/events",
   });
 
   // Derive agent state from events

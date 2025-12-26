@@ -4,7 +4,7 @@ import { getCells } from '../lib/api';
 
 interface CellsPaneProps {
   onCellSelect?: (cellId: string) => void;
-  /** Base URL for API calls (default: http://localhost:3001) */
+  /** Base URL for API calls (default: http://localhost:4483 - HIVE on phone keypad) */
   apiBaseUrl?: string;
 }
 
@@ -22,7 +22,7 @@ interface CellsPaneProps {
  * @param onCellSelect - Callback when a cell is selected
  * @param apiBaseUrl - Base URL for API calls
  */
-export const CellsPane = ({ onCellSelect, apiBaseUrl = "http://localhost:3001" }: CellsPaneProps) => {
+export const CellsPane = ({ onCellSelect, apiBaseUrl = "http://localhost:4483" }: CellsPaneProps) => {
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [cells, setCells] = useState<Cell[]>([]);
   const [loading, setLoading] = useState(true);

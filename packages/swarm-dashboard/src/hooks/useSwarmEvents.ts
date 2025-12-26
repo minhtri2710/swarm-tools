@@ -11,7 +11,7 @@
  * Usage:
  * ```tsx
  * const { state, events, subscribe, unsubscribe } = useSwarmEvents({
- *   url: "http://localhost:3001/events",
+ *   url: "http://localhost:4483/events",
  *   projectKey: "/path/to/project",
  *   onTaskProgress: (event) => console.log("Progress:", event.progress_percent),
  * });
@@ -23,7 +23,7 @@ import type { AgentEvent } from "../lib/types";
 import { useEventSource } from "./useEventSource";
 
 export interface UseSwarmEventsOptions {
-  /** SSE endpoint URL (default: http://localhost:3001/events) */
+  /** SSE endpoint URL (default: http://localhost:4483/events) */
   url?: string;
   /** Filter events by project_key (optional) */
   projectKey?: string;
@@ -37,7 +37,7 @@ export interface UseSwarmEventsOptions {
   onError?: (error: Error) => void;
 }
 
-const DEFAULT_URL = "http://localhost:3001/events";
+const DEFAULT_URL = "http://localhost:4483/events";
 
 export function useSwarmEvents(options: UseSwarmEventsOptions = {}) {
   const {
@@ -141,7 +141,7 @@ export function useSwarmEvents(options: UseSwarmEventsOptions = {}) {
  * Usage:
  * ```tsx
  * useSwarmEventSubscription({
- *   url: "http://localhost:3001/events",
+ *   url: "http://localhost:4483/events",
  *   onTaskProgress: (event) => console.log("Progress:", event),
  *   onTaskCompleted: (event) => console.log("Done:", event),
  * });

@@ -11,18 +11,18 @@ describe("swarm serve command", () => {
     const args = ["serve", "--port", "8080"];
     const port = args.includes("--port") 
       ? Number.parseInt(args[args.indexOf("--port") + 1])
-      : 3001;
+      : 4483;
     
     expect(port).toBe(8080);
   });
 
-  test("serve command defaults to port 3001", () => {
+  test("serve command defaults to port 4483 (HIVE on phone keypad)", () => {
     const args = ["serve"];
     const port = args.includes("--port") 
       ? Number.parseInt(args[args.indexOf("--port") + 1])
-      : 3001;
+      : 4483;
     
-    expect(port).toBe(3001);
+    expect(port).toBe(4483);
   });
 
   test("serve command uses project path from CWD", () => {
@@ -32,7 +32,9 @@ describe("swarm serve command", () => {
   });
 
   test("serve command appears in help text", async () => {
+    const packageDir = import.meta.dir.replace("/bin", "");
     const proc = spawn(["bun", "run", "bin/swarm.ts", "help"], {
+      cwd: packageDir,
       stdout: "pipe",
       stderr: "pipe",
     });
