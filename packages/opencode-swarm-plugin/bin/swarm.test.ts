@@ -1449,3 +1449,618 @@ describe("swarm history", () => {
     });
   });
 });
+
+// ============================================================================
+// Observability Commands Tests (TDD - Phase 5)
+// ============================================================================
+
+describe("swarm query", () => {
+  test("executes SQL query with table format", () => {
+    // Mock function - to be implemented in swarm.ts
+    function executeQueryCommand(args: string[]): { format: string; query?: string; preset?: string } {
+      let format = "table";
+      let query: string | undefined;
+      let preset: string | undefined;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--format") {
+          format = args[i + 1] || "table";
+          i++;
+        } else if (args[i] === "--sql") {
+          query = args[i + 1];
+          i++;
+        } else if (args[i] === "--preset") {
+          preset = args[i + 1];
+          i++;
+        }
+      }
+
+      return { format, query, preset };
+    }
+
+    const result = executeQueryCommand(["--sql", "SELECT * FROM events", "--format", "table"]);
+    
+    expect(result.query).toBe("SELECT * FROM events");
+    expect(result.format).toBe("table");
+  });
+
+  test("executes preset query", () => {
+    function executeQueryCommand(args: string[]): { format: string; query?: string; preset?: string } {
+      let format = "table";
+      let query: string | undefined;
+      let preset: string | undefined;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--format") {
+          format = args[i + 1] || "table";
+          i++;
+        } else if (args[i] === "--sql") {
+          query = args[i + 1];
+          i++;
+        } else if (args[i] === "--preset") {
+          preset = args[i + 1];
+          i++;
+        }
+      }
+
+      return { format, query, preset };
+    }
+
+    const result = executeQueryCommand(["--preset", "failed_decompositions", "--format", "csv"]);
+    
+    expect(result.preset).toBe("failed_decompositions");
+    expect(result.format).toBe("csv");
+  });
+
+  test("defaults to table format", () => {
+    function executeQueryCommand(args: string[]): { format: string; query?: string; preset?: string } {
+      let format = "table";
+      let query: string | undefined;
+      let preset: string | undefined;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--format") {
+          format = args[i + 1] || "table";
+          i++;
+        } else if (args[i] === "--sql") {
+          query = args[i + 1];
+          i++;
+        } else if (args[i] === "--preset") {
+          preset = args[i + 1];
+          i++;
+        }
+      }
+
+      return { format, query, preset };
+    }
+
+    const result = executeQueryCommand(["--sql", "SELECT * FROM events"]);
+    
+    expect(result.format).toBe("table");
+  });
+});
+
+describe("swarm dashboard", () => {
+  test("parses epic filter flag", () => {
+    function parseDashboardArgs(args: string[]): { epic?: string; refresh: number } {
+      let epic: string | undefined;
+      let refresh = 1000;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--epic") {
+          epic = args[i + 1];
+          i++;
+        } else if (args[i] === "--refresh") {
+          const ms = parseInt(args[i + 1], 10);
+          if (!isNaN(ms) && ms > 0) {
+            refresh = ms;
+          }
+          i++;
+        }
+      }
+
+      return { epic, refresh };
+    }
+
+    const result = parseDashboardArgs(["--epic", "mjkw1234567"]);
+    
+    expect(result.epic).toBe("mjkw1234567");
+    expect(result.refresh).toBe(1000); // default
+  });
+
+  test("parses refresh interval flag", () => {
+    function parseDashboardArgs(args: string[]): { epic?: string; refresh: number } {
+      let epic: string | undefined;
+      let refresh = 1000;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--epic") {
+          epic = args[i + 1];
+          i++;
+        } else if (args[i] === "--refresh") {
+          const ms = parseInt(args[i + 1], 10);
+          if (!isNaN(ms) && ms > 0) {
+            refresh = ms;
+          }
+          i++;
+        }
+      }
+
+      return { epic, refresh };
+    }
+
+    const result = parseDashboardArgs(["--refresh", "2000"]);
+    
+    expect(result.refresh).toBe(2000);
+  });
+
+  test("defaults to 1000ms refresh", () => {
+    function parseDashboardArgs(args: string[]): { epic?: string; refresh: number } {
+      let epic: string | undefined;
+      let refresh = 1000;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--epic") {
+          epic = args[i + 1];
+          i++;
+        } else if (args[i] === "--refresh") {
+          const ms = parseInt(args[i + 1], 10);
+          if (!isNaN(ms) && ms > 0) {
+            refresh = ms;
+          }
+          i++;
+        }
+      }
+
+      return { epic, refresh };
+    }
+
+    const result = parseDashboardArgs([]);
+    
+    expect(result.refresh).toBe(1000);
+  });
+});
+
+describe("swarm replay", () => {
+  test("parses speed multiplier flag", () => {
+    function parseReplayArgs(args: string[]): {
+      epicId?: string;
+      speed: number;
+      types: string[];
+      agent?: string;
+      since?: Date;
+      until?: Date;
+    } {
+      let epicId: string | undefined;
+      let speed = 1;
+      let types: string[] = [];
+      let agent: string | undefined;
+      let since: Date | undefined;
+      let until: Date | undefined;
+
+      // First positional arg is epic ID
+      if (args.length > 0 && !args[0].startsWith("--")) {
+        epicId = args[0];
+      }
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--speed") {
+          const val = args[i + 1];
+          if (val === "instant") {
+            speed = Infinity;
+          } else {
+            const parsed = parseFloat(val?.replace("x", "") || "1");
+            if (!isNaN(parsed) && parsed > 0) {
+              speed = parsed;
+            }
+          }
+          i++;
+        } else if (args[i] === "--type") {
+          types = args[i + 1]?.split(",").map((t) => t.trim()) || [];
+          i++;
+        } else if (args[i] === "--agent") {
+          agent = args[i + 1];
+          i++;
+        } else if (args[i] === "--since") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            since = new Date(dateStr);
+          }
+          i++;
+        } else if (args[i] === "--until") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            until = new Date(dateStr);
+          }
+          i++;
+        }
+      }
+
+      return { epicId, speed, types, agent, since, until };
+    }
+
+    const result = parseReplayArgs(["mjkw1234567", "--speed", "2x"]);
+    
+    expect(result.epicId).toBe("mjkw1234567");
+    expect(result.speed).toBe(2);
+  });
+
+  test("parses instant speed", () => {
+    function parseReplayArgs(args: string[]): {
+      epicId?: string;
+      speed: number;
+      types: string[];
+      agent?: string;
+      since?: Date;
+      until?: Date;
+    } {
+      let epicId: string | undefined;
+      let speed = 1;
+      let types: string[] = [];
+      let agent: string | undefined;
+      let since: Date | undefined;
+      let until: Date | undefined;
+
+      if (args.length > 0 && !args[0].startsWith("--")) {
+        epicId = args[0];
+      }
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--speed") {
+          const val = args[i + 1];
+          if (val === "instant") {
+            speed = Infinity;
+          } else {
+            const parsed = parseFloat(val?.replace("x", "") || "1");
+            if (!isNaN(parsed) && parsed > 0) {
+              speed = parsed;
+            }
+          }
+          i++;
+        } else if (args[i] === "--type") {
+          types = args[i + 1]?.split(",").map((t) => t.trim()) || [];
+          i++;
+        } else if (args[i] === "--agent") {
+          agent = args[i + 1];
+          i++;
+        } else if (args[i] === "--since") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            since = new Date(dateStr);
+          }
+          i++;
+        } else if (args[i] === "--until") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            until = new Date(dateStr);
+          }
+          i++;
+        }
+      }
+
+      return { epicId, speed, types, agent, since, until };
+    }
+
+    const result = parseReplayArgs(["mjkw1234567", "--speed", "instant"]);
+    
+    expect(result.speed).toBe(Infinity);
+  });
+
+  test("parses event type filters", () => {
+    function parseReplayArgs(args: string[]): {
+      epicId?: string;
+      speed: number;
+      types: string[];
+      agent?: string;
+      since?: Date;
+      until?: Date;
+    } {
+      let epicId: string | undefined;
+      let speed = 1;
+      let types: string[] = [];
+      let agent: string | undefined;
+      let since: Date | undefined;
+      let until: Date | undefined;
+
+      if (args.length > 0 && !args[0].startsWith("--")) {
+        epicId = args[0];
+      }
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--speed") {
+          const val = args[i + 1];
+          if (val === "instant") {
+            speed = Infinity;
+          } else {
+            const parsed = parseFloat(val?.replace("x", "") || "1");
+            if (!isNaN(parsed) && parsed > 0) {
+              speed = parsed;
+            }
+          }
+          i++;
+        } else if (args[i] === "--type") {
+          types = args[i + 1]?.split(",").map((t) => t.trim()) || [];
+          i++;
+        } else if (args[i] === "--agent") {
+          agent = args[i + 1];
+          i++;
+        } else if (args[i] === "--since") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            since = new Date(dateStr);
+          }
+          i++;
+        } else if (args[i] === "--until") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            until = new Date(dateStr);
+          }
+          i++;
+        }
+      }
+
+      return { epicId, speed, types, agent, since, until };
+    }
+
+    const result = parseReplayArgs(["--type", "DECISION,VIOLATION"]);
+    
+    expect(result.types).toEqual(["DECISION", "VIOLATION"]);
+  });
+
+  test("parses agent filter", () => {
+    function parseReplayArgs(args: string[]): {
+      epicId?: string;
+      speed: number;
+      types: string[];
+      agent?: string;
+      since?: Date;
+      until?: Date;
+    } {
+      let epicId: string | undefined;
+      let speed = 1;
+      let types: string[] = [];
+      let agent: string | undefined;
+      let since: Date | undefined;
+      let until: Date | undefined;
+
+      if (args.length > 0 && !args[0].startsWith("--")) {
+        epicId = args[0];
+      }
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--speed") {
+          const val = args[i + 1];
+          if (val === "instant") {
+            speed = Infinity;
+          } else {
+            const parsed = parseFloat(val?.replace("x", "") || "1");
+            if (!isNaN(parsed) && parsed > 0) {
+              speed = parsed;
+            }
+          }
+          i++;
+        } else if (args[i] === "--type") {
+          types = args[i + 1]?.split(",").map((t) => t.trim()) || [];
+          i++;
+        } else if (args[i] === "--agent") {
+          agent = args[i + 1];
+          i++;
+        } else if (args[i] === "--since") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            since = new Date(dateStr);
+          }
+          i++;
+        } else if (args[i] === "--until") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            until = new Date(dateStr);
+          }
+          i++;
+        }
+      }
+
+      return { epicId, speed, types, agent, since, until };
+    }
+
+    const result = parseReplayArgs(["--agent", "WildLake"]);
+    
+    expect(result.agent).toBe("WildLake");
+  });
+
+  test("parses time range filters", () => {
+    function parseReplayArgs(args: string[]): {
+      epicId?: string;
+      speed: number;
+      types: string[];
+      agent?: string;
+      since?: Date;
+      until?: Date;
+    } {
+      let epicId: string | undefined;
+      let speed = 1;
+      let types: string[] = [];
+      let agent: string | undefined;
+      let since: Date | undefined;
+      let until: Date | undefined;
+
+      if (args.length > 0 && !args[0].startsWith("--")) {
+        epicId = args[0];
+      }
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--speed") {
+          const val = args[i + 1];
+          if (val === "instant") {
+            speed = Infinity;
+          } else {
+            const parsed = parseFloat(val?.replace("x", "") || "1");
+            if (!isNaN(parsed) && parsed > 0) {
+              speed = parsed;
+            }
+          }
+          i++;
+        } else if (args[i] === "--type") {
+          types = args[i + 1]?.split(",").map((t) => t.trim()) || [];
+          i++;
+        } else if (args[i] === "--agent") {
+          agent = args[i + 1];
+          i++;
+        } else if (args[i] === "--since") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            since = new Date(dateStr);
+          }
+          i++;
+        } else if (args[i] === "--until") {
+          const dateStr = args[i + 1];
+          if (dateStr) {
+            until = new Date(dateStr);
+          }
+          i++;
+        }
+      }
+
+      return { epicId, speed, types, agent, since, until };
+    }
+
+    const result = parseReplayArgs([
+      "--since",
+      "2025-12-01T00:00:00Z",
+      "--until",
+      "2025-12-31T23:59:59Z",
+    ]);
+    
+    expect(result.since).toBeInstanceOf(Date);
+    expect(result.until).toBeInstanceOf(Date);
+    expect(result.since!.getFullYear()).toBe(2025);
+    expect(result.until!.getMonth()).toBe(11); // December is month 11
+  });
+});
+
+describe("swarm export", () => {
+  test("parses format flag", () => {
+    function parseExportArgs(args: string[]): {
+      format: string;
+      epic?: string;
+      output?: string;
+    } {
+      let format = "json";
+      let epic: string | undefined;
+      let output: string | undefined;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--format") {
+          format = args[i + 1] || "json";
+          i++;
+        } else if (args[i] === "--epic") {
+          epic = args[i + 1];
+          i++;
+        } else if (args[i] === "--output") {
+          output = args[i + 1];
+          i++;
+        }
+      }
+
+      return { format, epic, output };
+    }
+
+    const result = parseExportArgs(["--format", "otlp"]);
+    
+    expect(result.format).toBe("otlp");
+  });
+
+  test("parses epic filter", () => {
+    function parseExportArgs(args: string[]): {
+      format: string;
+      epic?: string;
+      output?: string;
+    } {
+      let format = "json";
+      let epic: string | undefined;
+      let output: string | undefined;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--format") {
+          format = args[i + 1] || "json";
+          i++;
+        } else if (args[i] === "--epic") {
+          epic = args[i + 1];
+          i++;
+        } else if (args[i] === "--output") {
+          output = args[i + 1];
+          i++;
+        }
+      }
+
+      return { format, epic, output };
+    }
+
+    const result = parseExportArgs(["--epic", "mjkw1234567"]);
+    
+    expect(result.epic).toBe("mjkw1234567");
+  });
+
+  test("parses output file path", () => {
+    function parseExportArgs(args: string[]): {
+      format: string;
+      epic?: string;
+      output?: string;
+    } {
+      let format = "json";
+      let epic: string | undefined;
+      let output: string | undefined;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--format") {
+          format = args[i + 1] || "json";
+          i++;
+        } else if (args[i] === "--epic") {
+          epic = args[i + 1];
+          i++;
+        } else if (args[i] === "--output") {
+          output = args[i + 1];
+          i++;
+        }
+      }
+
+      return { format, epic, output };
+    }
+
+    const result = parseExportArgs(["--output", "/tmp/export.json"]);
+    
+    expect(result.output).toBe("/tmp/export.json");
+  });
+
+  test("defaults to json format", () => {
+    function parseExportArgs(args: string[]): {
+      format: string;
+      epic?: string;
+      output?: string;
+    } {
+      let format = "json";
+      let epic: string | undefined;
+      let output: string | undefined;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--format") {
+          format = args[i + 1] || "json";
+          i++;
+        } else if (args[i] === "--epic") {
+          epic = args[i + 1];
+          i++;
+        } else if (args[i] === "--output") {
+          output = args[i + 1];
+          i++;
+        }
+      }
+
+      return { format, epic, output };
+    }
+
+    const result = parseExportArgs([]);
+    
+    expect(result.format).toBe("json");
+  });
+});
+

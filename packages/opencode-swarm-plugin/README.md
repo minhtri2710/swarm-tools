@@ -432,13 +432,18 @@ See **[evals/README.md](./evals/README.md)** for full architecture, scorer detai
 
 ---
 
-## CLI
+## CLI Reference
+
+### Setup & Configuration
 
 ```bash
-swarm setup     # Install and configure
-swarm doctor    # Check dependencies (CASS, UBS, Ollama)
-swarm init      # Initialize hive in project
+swarm setup     # Interactive installer for all dependencies
+swarm doctor    # Check dependency health (CASS, UBS, Ollama)
+swarm init      # Initialize hive in current project
 swarm config    # Show config file paths
+swarm update    # Update swarm plugin and bundled skills
+swarm migrate   # Migrate from legacy PGLite to libSQL
+swarm version   # Show version info
 ```
 
 ### Logging & Observability
@@ -449,9 +454,9 @@ Structured Pino logging with daily rotation:
 # Enable pretty logging during development
 SWARM_LOG_PRETTY=1 opencode
 
-# Query logs
+# Query logs (aliases: log/logs)
 swarm log                      # Tail recent logs
-swarm log compaction           # Filter by module
+swarm logs compaction          # Filter by module
 swarm log --level warn         # Filter by level (warn+)
 swarm log --since 1h           # Last hour
 swarm log --json | jq          # Pipe to jq for analysis
@@ -461,6 +466,291 @@ swarm log --json | jq          # Pipe to jq for analysis
 - `swarm.1log`, `swarm.2log`, ... (main logs)
 - `compaction.1log`, ... (module-specific)
 - Daily rotation, 14-day retention
+
+### Analytics & Debugging
+
+Query event store for insights and debugging:
+
+```bash
+# Execute SQL query against event store
+swarm query --sql "SELECT type, COUNT(*) FROM events GROUP BY type"
+
+# Use pre-built analytics queries
+swarm query --preset golden-signals      # Four Golden Signals (latency, traffic, errors, saturation)
+swarm query --preset compaction-health   # Compaction performance metrics
+swarm query --preset file-conflicts      # File reservation conflict analysis
+
+# Export formats
+swarm query --sql "..." --format json    # JSON output
+swarm query --sql "..." --format csv     # CSV output
+swarm query --sql "..." --format table   # Pretty table (default)
+
+# Stats and history
+swarm stats                              # Event store statistics (counts by type, project)
+swarm history                            # Recent swarm activity summary
+```
+
+### Real-Time Monitoring
+
+```bash
+# Dashboard (TUI) - live swarm status
+swarm dashboard                          # Show all active swarms
+swarm dashboard --epic mjmas3zxlmg       # Filter by epic ID
+swarm dashboard --refresh 5              # Auto-refresh every 5 seconds
+
+# Event replay - watch swarm execution
+swarm replay mjmas3zxlmg                 # Replay entire epic from events
+swarm replay mjmas3zxlmg --speed 2.0     # 2x speed
+swarm replay mjmas3zxlmg --type DECISION # Only DECISION events
+swarm replay mjmas3zxlmg --agent Worker1 # Single agent's perspective
+swarm replay mjmas3zxlmg --since "2h"    # Last 2 hours
+swarm replay mjmas3zxlmg --until "1h"    # Up to 1 hour ago
+```
+
+### Data Export
+
+```bash
+# Export event data
+swarm export                             # Export all events as JSON
+swarm export --format csv                # CSV format
+swarm export --epic mjmas3zxlmg          # Filter by epic ID
+swarm export --output swarm-data.json    # Save to file
+swarm export --format jsonl              # JSONL (one event per line)
+```
+
+## Observability Architecture
+
+Swarm uses **event sourcing** for complete observability. Every coordination action is an event - nothing is lost, everything is queryable.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    OBSERVABILITY FLOW                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌────────────┐                                                         │
+│  │   Agent    │  swarmmail_init()                                       │
+│  │  (Worker)  │  swarmmail_reserve(paths=["src/auth.ts"])               │
+│  │            │  swarm_progress(status="in_progress")                   │
+│  │            │  swarm_complete(...)                                    │
+│  └─────┬──────┘                                                         │
+│        │                                                                │
+│        ▼                                                                │
+│  ┌────────────────────────────────────────────────────────┐             │
+│  │              libSQL Event Store                        │             │
+│  │  ┌──────────────────────────────────────────────────┐  │             │
+│  │  │ events table (append-only)                       │  │             │
+│  │  │ ├─ id, type, timestamp, project_key, data       │  │             │
+│  │  │ ├─ agent_registered, message_sent, ...          │  │             │
+│  │  │ └─ task_started, task_progress, task_completed  │  │             │
+│  │  └──────────────────────────────────────────────────┘  │             │
+│  │                                                         │             │
+│  │  Automatic Projections (materialized views):            │             │
+│  │  ├─ agents (who's registered)                           │             │
+│  │  ├─ messages (agent inbox/outbox)                       │             │
+│  │  ├─ reservations (file locks)                           │             │
+│  │  └─ swarm_contexts (checkpoints)                        │             │
+│  └─────────────────┬───────────────────────────────────────┘             │
+│                    │                                                    │
+│       ┌────────────┼────────────┬────────────┐                          │
+│       ▼            ▼            ▼            ▼                          │
+│  ┌─────────┐ ┌─────────┐ ┌──────────┐ ┌──────────┐                     │
+│  │  swarm  │ │  swarm  │ │  swarm   │ │  swarm   │                     │
+│  │  query  │ │  stats  │ │ dashboard│ │  replay  │                     │
+│  │  (SQL)  │ │ (counts)│ │   (TUI)  │ │ (time)   │                     │
+│  └─────────┘ └─────────┘ └──────────┘ └──────────┘                     │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────┐            │
+│  │  Analytics Layer (Golden Signals)                       │            │
+│  │  ├─ Latency: avg task duration, P50/P95/P99             │            │
+│  │  ├─ Traffic: events/sec, message rate                   │            │
+│  │  ├─ Errors: task failures, violations                   │            │
+│  │  ├─ Saturation: file conflicts, blocked tasks           │            │
+│  │  └─ Conflicts: reservation collisions, deadlocks        │            │
+│  └─────────────────────────────────────────────────────────┘            │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Event Types
+
+| Event Type | When It Fires | Used For |
+|------------|---------------|----------|
+| `agent_registered` | Agent calls `swarmmail_init()` | Agent discovery, project tracking |
+| `message_sent` | Agent sends swarm mail | Agent coordination, thread tracking |
+| `file_reserved` | Agent reserves files for edit | Conflict detection, lock management |
+| `file_released` | Agent releases or completes | Lock cleanup, reservation tracking |
+| `task_started` | Agent starts cell work | Progress tracking, timeline |
+| `task_progress` | Agent reports milestone | Real-time monitoring, ETA |
+| `task_completed` | Agent calls `swarm_complete()` | Outcome tracking, learning signals |
+| `swarm_checkpointed` | Auto at 25/50/75% or manual | Recovery, context preservation |
+
+### Analytics Queries
+
+Pre-built queries based on **Four Golden Signals** observability framework:
+
+**Latency** (how fast):
+```sql
+-- Average task duration by type
+SELECT 
+  json_extract(data, '$.type') as task_type,
+  AVG(duration_ms) as avg_duration,
+  MAX(duration_ms) as p99_duration
+FROM events
+WHERE type = 'task_completed'
+GROUP BY task_type;
+```
+
+**Traffic** (how much):
+```sql
+-- Events per hour
+SELECT 
+  strftime('%Y-%m-%d %H:00', datetime(timestamp/1000, 'unixepoch')) as hour,
+  COUNT(*) as event_count
+FROM events
+GROUP BY hour
+ORDER BY hour DESC
+LIMIT 24;
+```
+
+**Errors** (what's broken):
+```sql
+-- Failed tasks with reasons
+SELECT 
+  json_extract(data, '$.bead_id') as task,
+  json_extract(data, '$.reason') as failure_reason,
+  timestamp
+FROM events
+WHERE type = 'task_completed' 
+  AND json_extract(data, '$.success') = 0
+ORDER BY timestamp DESC;
+```
+
+**Saturation** (resource contention):
+```sql
+-- File reservation conflicts
+SELECT 
+  json_extract(data, '$.paths') as file_paths,
+  COUNT(*) as conflict_count,
+  GROUP_CONCAT(json_extract(data, '$.agent_name')) as agents
+FROM events
+WHERE type = 'file_reserved'
+GROUP BY file_paths
+HAVING COUNT(*) > 1;
+```
+
+**Conflicts** (deadlocks, collisions):
+```sql
+-- Reservation wait times (TTL expirations)
+SELECT 
+  json_extract(data, '$.agent_name') as agent,
+  json_extract(data, '$.paths') as paths,
+  (expires_at - timestamp) as wait_time_ms
+FROM events
+WHERE type = 'file_reserved'
+  AND (expires_at - timestamp) > 10000 -- >10sec wait
+ORDER BY wait_time_ms DESC;
+```
+
+Run these via:
+```bash
+swarm query --preset golden-signals
+swarm query --preset compaction-health
+swarm query --preset file-conflicts
+```
+
+### Getting Started with Debugging
+
+**Scenario 1: Task is stuck "in_progress" forever**
+
+```bash
+# 1. Find the task in events
+swarm query --sql "SELECT * FROM events WHERE json_extract(data, '$.bead_id') = 'mjmas411jtj' ORDER BY timestamp"
+
+# 2. Check for file reservation conflicts
+swarm query --preset file-conflicts
+
+# 3. Replay to see execution timeline
+swarm replay mjmas3zxlmg --agent WorkerName
+
+# 4. Check if agent is still registered
+swarm stats
+```
+
+**Scenario 2: High failure rate for a specific epic**
+
+```bash
+# 1. Get stats by epic
+swarm query --sql "SELECT type, COUNT(*) FROM events WHERE json_extract(data, '$.epic_id') = 'mjmas3zxlmg' GROUP BY type"
+
+# 2. Find failures
+swarm query --sql "SELECT * FROM events WHERE type = 'task_completed' AND json_extract(data, '$.epic_id') = 'mjmas3zxlmg' AND json_extract(data, '$.success') = 0"
+
+# 3. Export for analysis
+swarm export --epic mjmas3zxlmg --format csv > failures.csv
+```
+
+**Scenario 3: Performance regression (tasks slower than before)**
+
+```bash
+# 1. Check latency trends
+swarm query --preset golden-signals
+
+# 2. Compare with historical baselines
+swarm history
+
+# 3. Identify bottlenecks
+swarm dashboard --epic mjmas3zxlmg --refresh 2
+```
+
+### Event Store Schema
+
+```sql
+CREATE TABLE events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,                    -- Event discriminator
+  project_key TEXT NOT NULL,             -- Project path (for multi-project filtering)
+  timestamp INTEGER NOT NULL,            -- Unix ms
+  sequence INTEGER GENERATED ALWAYS AS (id) STORED,
+  data TEXT NOT NULL,                    -- JSON payload (event-specific fields)
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Indexes for fast queries
+CREATE INDEX idx_events_project_key ON events(project_key);
+CREATE INDEX idx_events_type ON events(type);
+CREATE INDEX idx_events_timestamp ON events(timestamp);
+CREATE INDEX idx_events_project_type ON events(project_key, type);
+```
+
+**Event payload examples:**
+
+```json
+// agent_registered event
+{
+  "type": "agent_registered",
+  "project_key": "/path/to/project",
+  "timestamp": 1703001234567,
+  "data": "{\"agent_name\":\"BlueLake\",\"program\":\"opencode\",\"model\":\"claude-sonnet-4\",\"task_description\":\"mjmas411jtj: Update READMEs\"}"
+}
+
+// task_completed event
+{
+  "type": "task_completed",
+  "project_key": "/path/to/project", 
+  "timestamp": 1703001299999,
+  "data": "{\"agent_name\":\"BlueLake\",\"bead_id\":\"mjmas411jtj\",\"summary\":\"Updated both READMEs with CLI reference and event schema\",\"files_touched\":[\"packages/opencode-swarm-plugin/README.md\",\"packages/swarm-mail/README.md\"],\"success\":true}"
+}
+```
+
+### Database Location
+
+```bash
+# libSQL database path
+~/.config/swarm-tools/libsql/<project-hash>/swarm.db
+
+# Find your project's database
+swarm config  # Shows database path for current project
+```
 
 ---
 

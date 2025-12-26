@@ -718,3 +718,364 @@ const result = childScorer.scorer({ output, expected });  // ❌
 **"GatewayAuthenticationError"** - Missing `AI_GATEWAY_API_KEY`. Copy `.env` to package folder.
 
 **"no such table: eval_records"** - Run any swarm-mail operation to trigger schema creation. Tables are created lazily with `CREATE TABLE IF NOT EXISTS`.
+
+## Swarm CLI Commands
+
+The `swarm` CLI provides observability, analytics, and debugging tools for multi-agent coordination.
+
+### Analytics & Querying
+
+**swarm query** - SQL analytics with presets for common patterns
+
+```bash
+# Execute custom SQL query
+swarm query --sql "SELECT * FROM events WHERE type='worker_spawned' LIMIT 10"
+
+# Use preset query
+swarm query --preset failed_decompositions
+swarm query --preset duration_by_strategy
+swarm query --preset file_conflicts
+swarm query --preset worker_success_rate
+swarm query --preset review_rejections
+swarm query --preset blocked_tasks
+swarm query --preset agent_activity
+swarm query --preset event_frequency
+swarm query --preset error_patterns
+swarm query --preset compaction_stats
+
+# Output formats
+swarm query --preset failed_decompositions --format table  # Default
+swarm query --preset duration_by_strategy --format csv
+swarm query --preset file_conflicts --format json
+```
+
+**Available Presets:**
+
+| Preset | What It Shows |
+|--------|---------------|
+| `failed_decompositions` | Epics that failed with error details |
+| `duration_by_strategy` | Avg duration grouped by decomposition strategy |
+| `file_conflicts` | File reservation conflicts between workers |
+| `worker_success_rate` | Success rate per worker agent |
+| `review_rejections` | Tasks rejected during coordinator review |
+| `blocked_tasks` | Tasks currently blocked with reasons |
+| `agent_activity` | Agent activity timeline |
+| `event_frequency` | Event type distribution |
+| `error_patterns` | Common error patterns |
+| `compaction_stats` | Context compaction metrics |
+
+### Live Monitoring
+
+**swarm dashboard** - Live terminal UI with worker status
+
+```bash
+# Launch dashboard (auto-refresh every 1s)
+swarm dashboard
+
+# Focus on specific epic
+swarm dashboard --epic mjmas3zxlmg
+
+# Custom refresh rate (milliseconds)
+swarm dashboard --refresh 2000
+```
+
+**Dashboard shows:**
+- Active workers and their current tasks
+- Progress bars for in-progress work
+- File reservations (who owns what)
+- Recent messages between agents
+- Error alerts
+
+### Event Replay
+
+**swarm replay** - Replay epic events with timing control
+
+```bash
+# Replay epic at normal speed
+swarm replay mjmas3zxlmg
+
+# Fast playback
+swarm replay mjmas3zxlmg --speed 2x
+swarm replay mjmas3zxlmg --speed instant
+
+# Filter by event type
+swarm replay mjmas3zxlmg --type worker_spawned,task_completed
+
+# Filter by agent
+swarm replay mjmas3zxlmg --agent DarkHawk
+
+# Time range filters
+swarm replay mjmas3zxlmg --since "2025-12-25T10:00:00"
+swarm replay mjmas3zxlmg --until "2025-12-25T12:00:00"
+
+# Combine filters
+swarm replay mjmas3zxlmg --speed 2x --type worker_spawned --agent BlueLake
+```
+
+**Use cases:**
+- Debug coordination failures by replaying the sequence
+- Understand timing of worker spawns vs completions
+- Identify where bottlenecks occurred
+- Review coordinator decision points
+
+### Data Export
+
+**swarm export** - Export events for external analysis
+
+```bash
+# Export all events as JSON (stdout)
+swarm export
+
+# Export specific epic
+swarm export --epic mjmas3zxlmg
+
+# Export formats
+swarm export --format json --output events.json
+swarm export --format csv --output events.csv
+swarm export --format otlp --output events.otlp  # OpenTelemetry Protocol
+
+# Pipe to jq for filtering
+swarm export --format json | jq '.[] | select(.type=="worker_spawned")'
+```
+
+### Stats & History
+
+**swarm stats** - Health metrics powered by swarm-insights
+
+```bash
+# Last 7 days (default)
+swarm stats
+
+# Custom time period
+swarm stats --since 24h
+swarm stats --since 30m
+
+# JSON output for scripting
+swarm stats --json
+```
+
+**swarm history** - Recent swarm activity timeline
+
+```bash
+# Last 10 swarms (default)
+swarm history
+
+# More results
+swarm history --limit 20
+
+# Filter by status
+swarm history --status success
+swarm history --status failed
+swarm history --status in_progress
+
+# Filter by strategy
+swarm history --strategy file-based
+swarm history --strategy feature-based
+
+# Verbose mode (show subtasks)
+swarm history --verbose
+```
+
+### Session Logs
+
+**swarm log sessions** - View captured coordinator sessions
+
+```bash
+# List all sessions
+swarm log sessions
+
+# View specific session
+swarm log sessions <session_id>
+
+# Most recent session
+swarm log sessions --latest
+
+# Filter by event type
+swarm log sessions --type DECISION
+swarm log sessions --type VIOLATION
+swarm log sessions --type OUTCOME
+swarm log sessions --type COMPACTION
+
+# JSON output for jq
+swarm log sessions --json
+```
+
+## Observability Patterns
+
+### Debug Logging
+
+Use `DEBUG` env var to enable swarm debug logs. Logs use box-drawing characters for readability.
+
+**Patterns:**
+
+```bash
+# All swarm logs
+DEBUG=swarm:* swarm dashboard
+
+# Coordinator only
+DEBUG=swarm:coordinator swarm replay <epic-id>
+
+# Workers only
+DEBUG=swarm:worker swarm export
+
+# Swarm mail only
+DEBUG=swarm:mail swarm query --preset agent_activity
+
+# Multiple namespaces (comma-separated)
+DEBUG=swarm:coordinator,swarm:worker swarm dashboard
+```
+
+**Output format:**
+
+```
+┌─ swarm:coordinator ─────────────────────
+│ Spawning worker for task: mjmas40ys7g
+│ {"epic_id":"mjmas3zxlmg","strategy":"file-based"}
+└──────────────────────────────────────────
+```
+
+**Namespaces:**
+
+| Namespace | What It Logs |
+|-----------|--------------|
+| `swarm:*` | All swarm activity |
+| `swarm:coordinator` | Coordinator decisions (spawn, review, approve/reject) |
+| `swarm:worker` | Worker progress, reservations, completions |
+| `swarm:mail` | Inter-agent messages, inbox/outbox activity |
+
+**Use cases:**
+- **Debugging coordination failures**: `DEBUG=swarm:coordinator` to see decision flow
+- **Worker issues**: `DEBUG=swarm:worker` to see what workers are doing
+- **Message passing problems**: `DEBUG=swarm:mail` to trace communication
+- **Everything**: `DEBUG=swarm:*` when you need full visibility
+
+### Viewing Logs
+
+**swarm log** - Tail and filter swarm logs
+
+```bash
+# Recent logs (last 50 lines)
+swarm log
+
+# Filter by module
+swarm log compaction
+
+# Filter by level
+swarm log --level error
+swarm log --level warn
+
+# Time filters
+swarm log --since 30s
+swarm log --since 5m
+swarm log --since 2h
+
+# JSON output
+swarm log --json
+
+# Limit output
+swarm log --limit 100
+
+# Watch mode (live tail)
+swarm log --watch
+swarm log --watch --interval 500  # Poll every 500ms
+```
+
+## Error Enrichment
+
+SwarmError provides structured context for debugging multi-agent failures.
+
+### SwarmError Class
+
+```typescript
+import { SwarmError, enrichError } from "opencode-swarm-plugin";
+
+// Throw with context
+throw new SwarmError("File reservation failed", {
+  file: "src/auth.ts",
+  line: 42,
+  agent: "DarkHawk",
+  epic_id: "mjmas3zxlmg",
+  bead_id: "mjmas40ys7g",
+  recent_events: [
+    { type: "worker_spawned", timestamp: "2025-12-25T10:00:00Z", message: "Worker started" },
+    { type: "reservation_attempted", timestamp: "2025-12-25T10:01:00Z", message: "Tried to reserve src/auth.ts" }
+  ]
+});
+
+// Enrich existing error
+try {
+  await doWork();
+} catch (error) {
+  throw enrichError(error, {
+    agent: "BlueLake",
+    epic_id: "mjmas3zxlmg",
+    bead_id: "mjmas40ys7g"
+  });
+}
+```
+
+### Context Fields
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `file` | File where error occurred | `"src/auth.ts"` |
+| `line` | Line number | `42` |
+| `agent` | Agent that encountered error | `"DarkHawk"` |
+| `epic_id` | Epic being worked on | `"mjmas3zxlmg"` |
+| `bead_id` | Specific task/cell | `"mjmas40ys7g"` |
+| `recent_events` | Last N events before error | `[{type, timestamp, message}]` |
+
+### Automatic Fix Suggestions
+
+The `suggestFix()` function pattern-matches common errors and provides actionable fixes:
+
+```typescript
+import { suggestFix } from "opencode-swarm-plugin";
+
+try {
+  await swarmmail_reserve(["src/auth.ts"]);
+} catch (error) {
+  const suggestion = suggestFix(error);
+  if (suggestion) {
+    console.log(suggestion);
+  }
+  throw error;
+}
+```
+
+**Patterns detected:**
+
+| Error Pattern | Suggested Fix |
+|---------------|---------------|
+| "agent not registered" | Call `swarmmail_init()` before any swarm operations |
+| "already reserved" | File is reserved by another agent. Wait for release or coordinate. |
+| "uncommitted changes" | Run `hive_sync()` or commit changes before proceeding |
+| "manual close" detected | Use `swarm_complete()` instead of `hive_close()` in workers |
+| "context exhausted" | Use `/checkpoint` or spawn subagent |
+| "libsql not initialized" | Ensure `swarmmail_init()` is called |
+
+**Example output:**
+
+```
+┌─ Fix Suggestion ─────────────────────────
+│ Problem: Agent not initialized
+│ Solution: Call swarmmail_init() before any swarm operations
+│ Context: agent=DarkHawk epic_id=mjmas3zxlmg
+└──────────────────────────────────────────
+```
+
+### Integration with Debugging
+
+Combine SwarmError context with DEBUG logging:
+
+```bash
+# See full error context in logs
+DEBUG=swarm:* swarm replay <epic-id>
+```
+
+Errors logged with SwarmError.toJSON() include:
+- Error name and message
+- Stack trace
+- Full context object (file, line, agent, epic, events)
+
+This creates an audit trail from error → context → recent events → root cause.

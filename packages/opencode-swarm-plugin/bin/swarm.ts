@@ -2503,6 +2503,405 @@ async function update() {
   }
 }
 
+// ============================================================================
+// Observability Commands (Phase 5)
+// ============================================================================
+
+/**
+ * Parse args for query command
+ */
+function parseQueryArgs(args: string[]): { format: string; query?: string; preset?: string } {
+  let format = "table";
+  let query: string | undefined;
+  let preset: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--format") {
+      format = args[i + 1] || "table";
+      i++;
+    } else if (args[i] === "--sql") {
+      query = args[i + 1];
+      i++;
+    } else if (args[i] === "--preset") {
+      preset = args[i + 1];
+      i++;
+    }
+  }
+
+  return { format, query, preset };
+}
+
+async function query() {
+  const args = process.argv.slice(3); // Everything after "swarm query"
+  const parsed = parseQueryArgs(args);
+
+  // Import query tools
+  const { executeQuery, executePreset, formatAsTable, formatAsCSV, formatAsJSON } = await import("../src/observability/query-tools.js");
+
+  p.intro("swarm query");
+
+  const projectPath = process.cwd();
+
+  try {
+    let rows: any[];
+
+    if (parsed.preset) {
+      // Execute preset query
+      p.log.step(`Executing preset: ${parsed.preset}`);
+      rows = await executePreset(projectPath, parsed.preset);
+    } else if (parsed.query) {
+      // Execute custom SQL
+      p.log.step("Executing custom SQL");
+      rows = await executeQuery(projectPath, parsed.query);
+    } else {
+      p.log.error("No query specified. Use --sql or --preset");
+      p.outro("Aborted");
+      process.exit(1);
+    }
+
+    // Format output
+    let output: string;
+    switch (parsed.format) {
+      case "csv":
+        output = formatAsCSV(rows);
+        break;
+      case "json":
+        output = formatAsJSON(rows);
+        break;
+      case "table":
+      default:
+        output = formatAsTable(rows);
+        break;
+    }
+
+    console.log();
+    console.log(output);
+    console.log();
+
+    p.outro(`Found ${rows.length} result(s)`);
+  } catch (error) {
+    p.log.error("Query failed");
+    p.log.message(error instanceof Error ? error.message : String(error));
+    p.outro("Aborted");
+    process.exit(1);
+  }
+}
+
+/**
+ * Parse args for dashboard command
+ */
+function parseDashboardArgs(args: string[]): { epic?: string; refresh: number } {
+  let epic: string | undefined;
+  let refresh = 1000;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--epic") {
+      epic = args[i + 1];
+      i++;
+    } else if (args[i] === "--refresh") {
+      const ms = parseInt(args[i + 1], 10);
+      if (!isNaN(ms) && ms > 0) {
+        refresh = ms;
+      }
+      i++;
+    }
+  }
+
+  return { epic, refresh };
+}
+
+async function dashboard() {
+  const args = process.argv.slice(3);
+  const parsed = parseDashboardArgs(args);
+
+  const { getWorkerStatus, getSubtaskProgress, getFileLocks, getRecentMessages, getEpicList } = await import("../src/observability/dashboard.js");
+
+  p.intro("swarm dashboard");
+
+  const projectPath = process.cwd();
+
+  console.clear();
+  console.log(yellow("=".repeat(60)));
+  console.log(yellow("  SWARM DASHBOARD"));
+  console.log(yellow("=".repeat(60)));
+  console.log();
+
+  let iteration = 0;
+
+  // Refresh loop
+  const refreshLoop = async () => {
+    try {
+      // Move cursor to top
+      if (iteration > 0) {
+        process.stdout.write("\x1b[H");
+      }
+
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(dim(`Last updated: ${timestamp} (Press Ctrl+C to exit)`));
+      console.log();
+
+      // Worker Status
+      console.log(cyan("Worker Status:"));
+      const workers = await getWorkerStatus(projectPath, parsed.epic);
+      if (workers.length === 0) {
+        console.log(dim("  No active workers"));
+      } else {
+        for (const w of workers) {
+          console.log(`  ${w.agent_name} - ${w.status} - ${w.current_bead_id || "idle"}`);
+        }
+      }
+      console.log();
+
+      // Subtask Progress
+      console.log(cyan("Subtask Progress:"));
+      const progress = await getSubtaskProgress(projectPath, parsed.epic);
+      if (progress.length === 0) {
+        console.log(dim("  No subtasks"));
+      } else {
+        for (const p of progress) {
+          const bar = "█".repeat(Math.floor(p.progress / 10)) + "░".repeat(10 - Math.floor(p.progress / 10));
+          console.log(`  ${p.bead_id} [${bar}] ${p.progress}% - ${p.status}`);
+        }
+      }
+      console.log();
+
+      // File Locks
+      console.log(cyan("File Locks:"));
+      const locks = await getFileLocks(projectPath);
+      if (locks.length === 0) {
+        console.log(dim("  No active locks"));
+      } else {
+        for (const lock of locks) {
+          console.log(`  ${lock.path_pattern} - ${lock.agent_name} (${lock.exclusive ? "exclusive" : "shared"})`);
+        }
+      }
+      console.log();
+
+      // Recent Messages
+      console.log(cyan("Recent Messages:"));
+      const messages = await getRecentMessages(projectPath, parsed.epic, 5);
+      if (messages.length === 0) {
+        console.log(dim("  No recent messages"));
+      } else {
+        for (const msg of messages) {
+          const timeAgo = Math.floor((Date.now() - new Date(msg.timestamp).getTime()) / 1000);
+          console.log(`  ${msg.from_agent} → ${msg.to_agents}: ${msg.subject} (${timeAgo}s ago)`);
+        }
+      }
+      console.log();
+
+      iteration++;
+    } catch (error) {
+      console.log(red("Dashboard error: " + (error instanceof Error ? error.message : String(error))));
+    }
+  };
+
+  // Initial render
+  await refreshLoop();
+
+  // Set up refresh interval
+  const interval = setInterval(refreshLoop, parsed.refresh);
+
+  // Handle Ctrl+C
+  process.on("SIGINT", () => {
+    clearInterval(interval);
+    console.log();
+    p.outro("Dashboard closed");
+    process.exit(0);
+  });
+
+  // Keep process alive
+  await new Promise(() => {});
+}
+
+/**
+ * Parse args for replay command
+ */
+function parseReplayArgs(args: string[]): {
+  epicId?: string;
+  speed: number;
+  types: string[];
+  agent?: string;
+  since?: Date;
+  until?: Date;
+} {
+  let epicId: string | undefined;
+  let speed = 1;
+  let types: string[] = [];
+  let agent: string | undefined;
+  let since: Date | undefined;
+  let until: Date | undefined;
+
+  // First positional arg is epic ID
+  if (args.length > 0 && !args[0].startsWith("--")) {
+    epicId = args[0];
+  }
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--speed") {
+      const val = args[i + 1];
+      if (val === "instant") {
+        speed = Infinity;
+      } else {
+        const parsed = parseFloat(val?.replace("x", "") || "1");
+        if (!isNaN(parsed) && parsed > 0) {
+          speed = parsed;
+        }
+      }
+      i++;
+    } else if (args[i] === "--type") {
+      types = args[i + 1]?.split(",").map((t) => t.trim()) || [];
+      i++;
+    } else if (args[i] === "--agent") {
+      agent = args[i + 1];
+      i++;
+    } else if (args[i] === "--since") {
+      const dateStr = args[i + 1];
+      if (dateStr) {
+        since = new Date(dateStr);
+      }
+      i++;
+    } else if (args[i] === "--until") {
+      const dateStr = args[i + 1];
+      if (dateStr) {
+        until = new Date(dateStr);
+      }
+      i++;
+    }
+  }
+
+  return { epicId, speed, types, agent, since, until };
+}
+
+async function replay() {
+  const args = process.argv.slice(3);
+  const parsed = parseReplayArgs(args);
+
+  if (!parsed.epicId) {
+    p.log.error("Epic ID required");
+    p.log.message("Usage: swarm replay <epic-id> [options]");
+    process.exit(1);
+  }
+
+  const { fetchEpicEvents, filterEvents, replayWithTiming, formatReplayEvent } = await import("../src/observability/replay-tools.js");
+
+  p.intro(`swarm replay ${parsed.epicId}`);
+
+  const projectPath = process.cwd();
+
+  try {
+    // Fetch events
+    p.log.step("Fetching events...");
+    let events = await fetchEpicEvents(projectPath, parsed.epicId);
+
+    // Apply filters
+    events = filterEvents(events, {
+      types: parsed.types,
+      agent: parsed.agent,
+      since: parsed.since,
+      until: parsed.until,
+    });
+
+    if (events.length === 0) {
+      p.log.warn("No events found matching filters");
+      p.outro("Aborted");
+      process.exit(0);
+    }
+
+    p.log.success(`Found ${events.length} events`);
+    p.log.message(dim(`Speed: ${parsed.speed === Infinity ? "instant" : `${parsed.speed}x`}`));
+    console.log();
+
+    // Replay events
+    await replayWithTiming(events, parsed.speed, (event) => {
+      console.log(formatReplayEvent(event));
+    });
+
+    console.log();
+    p.outro("Replay complete");
+  } catch (error) {
+    p.log.error("Replay failed");
+    p.log.message(error instanceof Error ? error.message : String(error));
+    p.outro("Aborted");
+    process.exit(1);
+  }
+}
+
+/**
+ * Parse args for export command
+ */
+function parseExportArgs(args: string[]): {
+  format: string;
+  epic?: string;
+  output?: string;
+} {
+  let format = "json";
+  let epic: string | undefined;
+  let output: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--format") {
+      format = args[i + 1] || "json";
+      i++;
+    } else if (args[i] === "--epic") {
+      epic = args[i + 1];
+      i++;
+    } else if (args[i] === "--output") {
+      output = args[i + 1];
+      i++;
+    }
+  }
+
+  return { format, epic, output };
+}
+
+async function exportEvents() {
+  const args = process.argv.slice(3);
+  const parsed = parseExportArgs(args);
+
+  const { exportToOTLP, exportToCSV, exportToJSON } = await import("../src/observability/export-tools.js");
+
+  p.intro("swarm export");
+
+  const projectPath = process.cwd();
+
+  try {
+    let result: string;
+
+    p.log.step(`Exporting as ${parsed.format}...`);
+
+    switch (parsed.format) {
+      case "otlp":
+        result = await exportToOTLP(projectPath, parsed.epic);
+        break;
+      case "csv":
+        result = await exportToCSV(projectPath, parsed.epic);
+        break;
+      case "json":
+      default:
+        result = await exportToJSON(projectPath, parsed.epic);
+        break;
+    }
+
+    // Output to file or stdout
+    if (parsed.output) {
+      writeFileSync(parsed.output, result);
+      p.log.success(`Exported to: ${parsed.output}`);
+    } else {
+      console.log();
+      console.log(result);
+      console.log();
+    }
+
+    p.outro("Export complete");
+  } catch (error) {
+    p.log.error("Export failed");
+    p.log.message(error instanceof Error ? error.message : String(error));
+    p.outro("Aborted");
+    process.exit(1);
+  }
+}
+
 async function help() {
   console.log(yellow(BANNER));
   console.log(dim("  " + TAGLINE + " v" + VERSION));
@@ -2525,6 +2924,10 @@ ${cyan("Commands:")}
   swarm stats     Show swarm health metrics powered by swarm-insights (strategy success rates, patterns)
   swarm history   Show recent swarm activity timeline with insights data
   swarm eval      Eval-driven development commands
+  swarm query     SQL analytics with presets (--sql, --preset, --format)
+  swarm dashboard Live terminal UI with worker status (--epic, --refresh)
+  swarm replay    Event replay with timing (--speed, --type, --agent, --since, --until)
+  swarm export    Export events (--format otlp/csv/json, --epic, --output)
   swarm update    Update to latest version
   swarm version   Show version and banner
   swarm tool      Execute a tool (for plugin wrapper)
@@ -2572,6 +2975,25 @@ ${cyan("Eval Commands:")}
   swarm eval status [eval-name]        Show current phase, thresholds, recent scores
   swarm eval history                   Show eval run history with trends
   swarm eval run                       Execute evals and report results (stub)
+
+${cyan("Observability Commands:")}
+  swarm query --sql <query>            Execute custom SQL query
+  swarm query --preset <name>          Execute preset query (failed_decompositions, duration_by_strategy, etc)
+  swarm query --format <fmt>           Output format: table (default), csv, json
+  swarm dashboard                      Live terminal UI showing worker status, progress, locks, messages
+  swarm dashboard --epic <id>          Focus on specific epic
+  swarm dashboard --refresh <ms>       Poll interval in milliseconds (default: 1000)
+  swarm replay <epic-id>               Replay epic events with timing
+  swarm replay <epic-id> --speed 2x    Playback speed: 1x, 2x, instant
+  swarm replay <epic-id> --type <types>  Filter by event types (comma-separated)
+  swarm replay <epic-id> --agent <name>  Filter by agent name
+  swarm replay <epic-id> --since <time>  Events after this time
+  swarm replay <epic-id> --until <time>  Events before this time
+  swarm export                         Export events to stdout (JSON)
+  swarm export --format otlp           Export as OpenTelemetry (OTLP)
+  swarm export --format csv            Export as CSV
+  swarm export --epic <id>             Export specific epic only
+  swarm export --output <file>         Write to file instead of stdout
 
 ${cyan("Usage in OpenCode:")}
   /swarm "Add user authentication with OAuth"
@@ -4611,6 +5033,18 @@ switch (command) {
     break;
   case "eval":
     await evalCommand();
+    break;
+  case "query":
+    await query();
+    break;
+  case "dashboard":
+    await dashboard();
+    break;
+  case "replay":
+    await replay();
+    break;
+  case "export":
+    await exportEvents();
     break;
   case "version":
   case "--version":
