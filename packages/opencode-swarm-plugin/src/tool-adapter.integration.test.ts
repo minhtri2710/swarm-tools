@@ -1010,7 +1010,7 @@ describe("memory tools adapter wiring", () => {
 
     // Should succeed (no "dbOverride required" error)
     expect(result.id).toBeTruthy();
-    expect(result.id).toMatch(/^mem_/);
+    expect(result.id).toMatch(/^mem-/);
     
     // If we got here, adapter wiring works!
   });
@@ -1028,7 +1028,7 @@ describe("memory tools adapter wiring", () => {
       semantic_memory_store,
       {
         information: "OAuth refresh tokens need 5min buffer before expiry",
-        metadata: "auth,tokens,oauth",
+        metadata: JSON.stringify({ domain: "auth", topic: "tokens" }),
         tags: "auth,integration-test",
       },
       ctx,

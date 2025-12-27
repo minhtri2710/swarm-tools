@@ -15,6 +15,9 @@ describe("Logger Infrastructure", () => {
     }
     await mkdir(testLogDir, { recursive: true });
     originalEnv = process.env.SWARM_LOG_PRETTY;
+    
+    // Disable pretty mode to force file output
+    delete process.env.SWARM_LOG_PRETTY;
 
     // Clear module cache to reset logger instances
     delete require.cache[require.resolve("./logger")];
