@@ -21,6 +21,16 @@ import { appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
+// Import swarm signature projection for deterministic swarm detection
+import {
+  projectSwarmState,
+  hasSwarmSignature,
+  isSwarmActive,
+  getSwarmSummary,
+  type SwarmProjection,
+  type ToolCallEvent,
+} from "opencode-swarm-plugin";
+
 const SWARM_CLI = "swarm";
 
 // =============================================================================
@@ -1535,9 +1545,12 @@ interface SessionScanResult {
     toolName: string;
     args: Record<string, unknown>;
     output?: string;
+    timestamp?: number;
   }>;
   swarmDetected: boolean;
   reasons: string[];
+  /** Projected swarm state from event fold - ground truth from session events */
+  projection?: SwarmProjection;
 }
 
 /**
@@ -1678,15 +1691,19 @@ async function scanSessionMessages(sessionID: string): Promise<SessionScanResult
               highConfidenceCount++;
             }
 
-            // Extract args/output from state if available
+            // Extract args/output/timestamp from state if available
             const state = toolPart.state;
             const args = state && "input" in state ? state.input : {};
             const output = state && "output" in state ? state.output : undefined;
+            const timestamp = state && "time" in state && state.time && typeof state.time === "object" && "end" in state.time 
+              ? (state.time as { end: number }).end 
+              : Date.now();
 
             result.toolCalls.push({
               toolName,
               args,
               output,
+              timestamp,
             });
 
             logCompaction("debug", "session_scan_tool_found", {
@@ -1699,13 +1716,36 @@ async function scanSessionMessages(sessionID: string): Promise<SessionScanResult
       }
     }
 
-    // Determine if swarm detected based on tool calls
-    if (highConfidenceCount > 0) {
+    // =======================================================================
+    // PROJECT SWARM STATE FROM EVENTS (deterministic, no heuristics)
+    // =======================================================================
+    // Convert tool calls to ToolCallEvent format for projection
+    const events: ToolCallEvent[] = result.toolCalls.map(tc => ({
+      tool: tc.toolName,
+      input: tc.args as Record<string, unknown>,
+      output: tc.output || "{}",
+      timestamp: tc.timestamp || Date.now(),
+    }));
+
+    // Project swarm state from events - this is the ground truth
+    const projection = projectSwarmState(events);
+    result.projection = projection;
+
+    // Use projection for swarm detection (deterministic)
+    if (projection.isSwarm) {
+      result.swarmDetected = true;
+      result.reasons.push(`Swarm signature detected: epic ${projection.epic?.id || "unknown"} with ${projection.counts.total} subtasks`);
+      
+      if (isSwarmActive(projection)) {
+        result.reasons.push(`Swarm ACTIVE: ${projection.counts.spawned} spawned, ${projection.counts.inProgress} in_progress, ${projection.counts.completed} completed (not closed)`);
+      } else {
+        result.reasons.push(`Swarm COMPLETE: all ${projection.counts.closed} subtasks closed`);
+      }
+    } else if (highConfidenceCount > 0) {
+      // Fallback to heuristic detection if no signature but high-confidence tools found
       result.swarmDetected = true;
       result.reasons.push(`${highConfidenceCount} high-confidence swarm tools (${Array.from(new Set(result.toolCalls.filter(tc => highConfidenceTools.has(tc.toolName)).map(tc => tc.toolName))).join(", ")})`);
-    }
-    
-    if (swarmToolCount > 0 && !result.swarmDetected) {
+    } else if (swarmToolCount > 0) {
       result.swarmDetected = true;
       result.reasons.push(`${swarmToolCount} swarm-related tools used`);
     }
@@ -1731,6 +1771,14 @@ async function scanSessionMessages(sessionID: string): Promise<SessionScanResult
       swarm_detected: result.swarmDetected,
       reasons: result.reasons,
       unique_tools: Array.from(new Set(result.toolCalls.map(tc => tc.toolName))),
+      // Add projection summary
+      projection_summary: projection.isSwarm ? {
+        epic_id: projection.epic?.id,
+        epic_title: projection.epic?.title,
+        epic_status: projection.epic?.status,
+        is_active: isSwarmActive(projection),
+        counts: projection.counts,
+      } : null,
     });
 
     return result;
@@ -2278,17 +2326,66 @@ const SwarmPlugin: Plugin = async (
           session_id: input.sessionID,
           confidence: detection.confidence,
           reasons: detection.reasons,
+          has_projection: !!sessionScan.projection?.isSwarm,
         });
 
         try {
-          // Level 1: Query actual state
-          const queryStart = Date.now();
-          const snapshot = await querySwarmState(input.sessionID);
-          const queryDuration = Date.now() - queryStart;
+          // =======================================================================
+          // PREFER PROJECTION (ground truth from events) OVER HIVE QUERY
+          // =======================================================================
+          // The projection is derived from session events - it's the source of truth.
+          // Hive query may show all cells closed even if swarm was active.
+          
+          let snapshot: SwarmStateSnapshot;
+          
+          if (sessionScan.projection?.isSwarm) {
+            // Use projection as primary source - convert to snapshot format
+            const proj = sessionScan.projection;
+            snapshot = {
+              sessionID: input.sessionID,
+              detection: {
+                confidence: isSwarmActive(proj) ? "high" : "medium",
+                reasons: sessionScan.reasons,
+              },
+              epic: proj.epic ? {
+                id: proj.epic.id,
+                title: proj.epic.title,
+                status: proj.epic.status,
+                subtasks: Array.from(proj.subtasks.values()).map(s => ({
+                  id: s.id,
+                  title: s.title,
+                  status: s.status as "open" | "in_progress" | "blocked" | "closed",
+                  files: s.files,
+                })),
+              } : undefined,
+              messages: [],
+              reservations: [],
+            };
+            
+            logCompaction("info", "using_projection_as_snapshot", {
+              session_id: input.sessionID,
+              epic_id: proj.epic?.id,
+              epic_title: proj.epic?.title,
+              subtask_count: proj.subtasks.size,
+              is_active: isSwarmActive(proj),
+              counts: proj.counts,
+            });
+          } else {
+            // Fallback to hive query (may be stale)
+            const queryStart = Date.now();
+            snapshot = await querySwarmState(input.sessionID);
+            const queryDuration = Date.now() - queryStart;
+            
+            logCompaction("info", "fallback_to_hive_query", {
+              session_id: input.sessionID,
+              duration_ms: queryDuration,
+              reason: "no projection available or not a swarm",
+            });
+          }
 
-          logCompaction("info", "swarm_state_queried", {
+          logCompaction("info", "swarm_state_resolved", {
             session_id: input.sessionID,
-            duration_ms: queryDuration,
+            source: sessionScan.projection?.isSwarm ? "projection" : "hive_query",
             has_epic: !!snapshot.epic,
             epic_id: snapshot.epic?.id,
             epic_title: snapshot.epic?.title,
@@ -2304,7 +2401,6 @@ const SwarmPlugin: Plugin = async (
             reservation_count: snapshot.reservations?.length ?? 0,
             detection_confidence: snapshot.detection.confidence,
             detection_reasons: snapshot.detection.reasons,
-            full_snapshot: snapshot, // Log the entire snapshot
           });
 
           // =======================================================================

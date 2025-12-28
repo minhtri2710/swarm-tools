@@ -965,3 +965,42 @@ export {
   type ValidationIssue,
   type ValidationContext,
 } from "./swarm-validation";
+
+/**
+ * Swarm Signature Detection
+ *
+ * Deterministic, algorithmic detection of swarm coordination from session events.
+ * No heuristics, no confidence levels - a swarm either exists or it doesn't.
+ *
+ * A SWARM is defined by this event sequence:
+ * 1. hive_create_epic(epic_title, subtasks[]) → epic_id
+ * 2. swarm_spawn_subtask(bead_id, epic_id, ...) → prompt (at least one)
+ *
+ * The projection folds over events to produce ground truth state:
+ * - Which epic is being coordinated
+ * - Which subtasks exist and their lifecycle status
+ * - What files are assigned to each subtask
+ *
+ * Functions:
+ * - projectSwarmState - Fold over events to produce swarm state
+ * - hasSwarmSignature - Quick check for swarm signature
+ * - isSwarmActive - Check if swarm has pending work
+ * - getSwarmSummary - Human-readable status summary
+ *
+ * Types:
+ * - SwarmProjection - Complete swarm state from event projection
+ * - ToolCallEvent - Tool call event from session messages
+ * - SubtaskState - Subtask lifecycle state
+ * - EpicState - Epic state
+ */
+export {
+  projectSwarmState,
+  hasSwarmSignature,
+  isSwarmActive,
+  getSwarmSummary,
+  type SwarmProjection,
+  type ToolCallEvent,
+  type SubtaskState,
+  type SubtaskStatus,
+  type EpicState,
+} from "./swarm-signature";
