@@ -1453,8 +1453,18 @@ function getFixCommand(dep: Dependency): string | null {
   }
 }
 
-async function doctor() {
+async function doctor(debug = false) {
   p.intro("swarm doctor v" + VERSION);
+
+  if (debug) {
+    p.log.step("Debug info:");
+    p.log.message(dim(`  Runtime: ${typeof Bun !== 'undefined' ? 'Bun' : 'Node.js'}`));
+    p.log.message(dim(`  Node version: ${process.version}`));
+    p.log.message(dim(`  Platform: ${process.platform}`));
+    p.log.message(dim(`  Arch: ${process.arch}`));
+    p.log.message(dim(`  CWD: ${process.cwd()}`));
+    p.log.message(dim(`  PATH entries: ${(process.env.PATH || '').split(':').length}`));
+  }
 
   const s = p.spinner();
   s.start("Checking dependencies...");
@@ -1462,6 +1472,14 @@ async function doctor() {
   const results = await checkAllDependencies();
 
   s.stop("Dependencies checked");
+  
+  if (debug) {
+    p.log.step("Dependency check details:");
+    for (const { dep, available, version } of results) {
+      const status = available ? green("✓") : red("✗");
+      p.log.message(dim(`  ${status} ${dep.command} ${dep.checkArgs.join(" ")} → ${available ? `v${version || "unknown"}` : "not found"}`));
+    }
+  }
 
   const required = results.filter((r) => r.dep.required);
   const optional = results.filter((r) => !r.dep.required);
@@ -5301,9 +5319,11 @@ switch (command) {
     await setup(reinstallFlag || yesFlag, yesFlag);
     break;
   }
-  case "doctor":
-    await doctor();
+  case "doctor": {
+    const debugFlag = process.argv.includes("--debug") || process.argv.includes("-d");
+    await doctor(debugFlag);
     break;
+  }
   case "init":
     await init();
     break;
